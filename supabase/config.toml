@@ -1,15 +1,38 @@
 project_id = "guestatlas"
+
 [api]
 enabled = true
-schemas = ["public", "storage", "graphql_public"]
+schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
+
 [db]
 major_version = 17
+
+# Local/auth reference configuration. GO-LIVE intentionally does NOT run
+# `supabase config push` because that command syncs unrelated platform services
+# as well and can trigger paid-only Storage/Vector configuration checks.
 [auth]
 enabled = true
 site_url = "https://guestatlas.mosheschwartzberg.workers.dev"
 additional_redirect_urls = ["https://guestatlas.mosheschwartzberg.workers.dev/auth/confirm"]
-[storage]
-enabled = true
-file_size_limit = "10MiB"
+
+[auth.mfa]
+max_enrolled_factors = 10
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = false
+max_frequency = "1m0s"
+otp_length = 8
+otp_expiry = 3600
