@@ -2,6 +2,8 @@
 
 GuestAtlas is a multi-property hotel guest feedback and incident network. It is designed as **verified hospitality intelligence**, not a public people directory or automatic blacklist.
 
+Production URL: `https://guestatlas.mosheschwartzberg.workers.dev`
+
 ## Production architecture
 
 - **Cloudflare Workers** runs the full Next.js application, Server Components, Server Actions and API routes through OpenNext.
@@ -13,6 +15,14 @@ GuestAtlas is a multi-property hotel guest feedback and incident network. It is 
 - Evidence uploaded before the R2 migration remains readable through a legacy Supabase Storage fallback; all new evidence goes to R2.
 
 The browser uses Supabase only for authentication. Guest/business tables are accessed by server code. The server-only Supabase secret key, encryption keys and matching secrets are never exposed to browser code.
+
+## User surfaces
+
+- **Platform administrator:** `/platform` for network governance and property verification. Requires platform-admin status and MFA.
+- **Hotel staff:** `/dashboard` with property dashboard, guests, stays, feedback, incidents, moderation, disputes, audit, retention and team tools according to role.
+- **Guest rights information:** `/guest-rights` explains how a guest obtains access and submits a challenge/correction request.
+- **Private guest portal:** `/guest-portal/<secure-token>` lets the verified guest review visible feedback/incidents and submit record-level disputes without creating a hotel staff account.
+- **Hotel-issued guest access:** managers create a 30-day private guest portal link from `/guest-access/<guest-id>` after verifying the recipient.
 
 ## Included product surface
 
@@ -61,41 +71,37 @@ Incidents do **not** secretly reduce the numerical score. They remain separate r
 
 ## One-click Windows production release
 
-1. Have a Cloudflare account and a Supabase project.
-2. Put your local `.env.local` beside `GO-LIVE.cmd`, or run `configure.cmd` once. The server secret stays local and `.env.local` is gitignored.
-3. You do **not** need to know your GuestAtlas URL ahead of time. Leave the URL in automatic mode.
-4. Run **`GO-LIVE.cmd`**.
+1. Have a Cloudflare account and the linked Supabase project.
+2. Keep the local `.env.local` beside `GO-LIVE.cmd`, or run `configure.cmd` once. The server secret stays local and `.env.local` is gitignored.
+3. Run **`GO-LIVE.cmd`**.
 
-If Git or Node.js 22+ are missing and Windows `winget` is available, `GO-LIVE.cmd` installs them automatically.
-
-For a first deployment without a custom domain, GuestAtlas uses a controlled bootstrap origin only for the initial Worker upload. Cloudflare assigns a URL in the form `https://guestatlas.<account-subdomain>.workers.dev`. The deploy script captures that URL from Wrangler, rewrites `.env.local`, rebuilds the application with the real canonical origin, validates the final Worker bundle again, and deploys the final configuration. No production URL needs to be entered manually.
+GuestAtlas is now permanently pinned to `https://guestatlas.mosheschwartzberg.workers.dev`. `GO-LIVE.cmd` rewrites the local canonical URL to this origin before validation so invite links, guest portal links, Auth callbacks and the maintenance Worker cannot fall back to localhost.
 
 `GO-LIVE.cmd` does all of the following:
 
 1. Syncs GitHub `main` before validation while preserving tracked local edits with autostash.
-2. Installs exact dependencies.
-3. Runs the production dependency vulnerability gate.
-4. Validates environment/source integrity.
-5. Runs TypeScript and cryptography/scoring self-tests.
-6. Authenticates Wrangler.
-7. Creates/verifies the private `guestatlas-evidence` R2 bucket.
-8. Builds the complete OpenNext Cloudflare Worker.
-9. Runs Wrangler dry-run validation for both Workers.
-10. Commits and pushes the exact validated source to GitHub `main`.
-11. Links Supabase, applies migrations and verifies the Postgres schema.
-12. If needed, performs the temporary first Worker deployment and automatically discovers the assigned `workers.dev` origin.
-13. Rewrites local environment configuration with that origin, rebuilds and revalidates.
-14. Deploys the final GuestAtlas application Worker.
-15. Deploys the scheduled `guestatlas-maintenance` Worker.
-16. Deletes temporary deployment logs and secret bundles.
-
-If you later want a custom domain, set `NEXT_PUBLIC_APP_URL=https://your-host.example.com`, set `GUESTATLAS_URL_MODE=fixed`, and set `CLOUDFLARE_CUSTOM_DOMAIN=your-host.example.com`, then rerun `GO-LIVE.cmd`.
+2. Pins the final GuestAtlas production URL into `.env.local`.
+3. Installs exact dependencies and runs the production vulnerability gate.
+4. Validates environment/source integrity, TypeScript and application self-tests.
+5. Authenticates Wrangler, verifies R2, builds OpenNext and dry-runs both Workers.
+6. Commits and pushes the exact validated source to GitHub `main`.
+7. Links Supabase and runs `supabase config push`, which synchronizes the hosted Auth Site URL and redirect allowlist from `supabase/config.toml`.
+8. Applies database migrations and verifies the expected Postgres schema.
+9. Deploys the GuestAtlas application Worker and scheduled maintenance Worker.
+10. Deletes temporary deployment logs and secret bundles.
 
 `deploy.cmd` is kept as a compatibility alias and calls `GO-LIVE.cmd`.
 
-## Supabase Auth after first deployment
+## Supabase Auth production configuration
 
-After `GO-LIVE.cmd` prints the final application URL, set the Supabase Auth Site URL to that value and allow `<final-url>/auth/confirm`.
+`supabase/config.toml` is the source of truth for hosted Auth URL settings:
+
+```text
+Site URL = https://guestatlas.mosheschwartzberg.workers.dev
+Redirect = https://guestatlas.mosheschwartzberg.workers.dev/auth/confirm
+```
+
+`GO-LIVE.cmd` pushes this configuration to the linked Supabase project on each production release.
 
 For the **Confirm signup** email template use:
 
