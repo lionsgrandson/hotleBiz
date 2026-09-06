@@ -16,7 +16,6 @@ echo.
 
 call :ensure_prerequisites || goto :fail
 
-rem Adopt the intended GitHub history even if the user started from an extracted ZIP.
 git rev-parse --is-inside-work-tree >nul 2>&1
 if errorlevel 1 (
   echo [GIT] Initializing this folder against lionsgrandson/hotleBiz...
@@ -38,7 +37,6 @@ if errorlevel 1 (
   )
 )
 
-rem Sync BEFORE testing. Autostash preserves tracked local edits while rebasing.
 echo [0/21] Syncing GitHub main before validation...
 call git pull --rebase --autostash origin main || goto :fail
 
@@ -118,8 +116,6 @@ if errorlevel 1 (
 )
 
 echo [13/21] Pushing validated source to GitHub main...
-rem Deliberately DO NOT pull here. If main changed after validation, push must fail
-rem so unvalidated remote code is never silently mixed into this release.
 call git push origin HEAD:main || (
   echo [ERROR] GitHub main changed after this build was validated.
   echo Run GO-LIVE.cmd again so the new combined source is rebuilt before deployment.
@@ -146,8 +142,7 @@ call npm run verify || goto :fail
 if "%AUTO_WORKERS_DEV%"=="1" (
   echo [17/21] First Cloudflare deploy: discovering the assigned workers.dev URL...
   if exist "%DEPLOY_LOG%" del /q "%DEPLOY_LOG%" >nul 2>&1
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "& { & npx.cmd opennextjs-cloudflare deploy --secrets-file '%CF_SECRETS%' 2^>^&1 ^| Tee-Object -FilePath '%DEPLOY_LOG%'; exit $LASTEXITCODE }"
-  if errorlevel 1 goto :fail
+  call node scripts\deploy-and-capture.mjs "%CF_SECRETS%" "%DEPLOY_LOG%" || goto :fail
 
   for /f "usebackq delims=" %%U in (`node scripts\finalize-workers-url.mjs "%DEPLOY_LOG%" ".env.local"`) do set "DISCOVERED_URL=%%U"
   if errorlevel 1 goto :fail
