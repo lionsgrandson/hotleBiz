@@ -37,6 +37,7 @@ const requiredFiles = [
   'src/app/api/incidents/route.ts',
   'src/app/api/evidence/[id]/route.ts',
   'src/app/api/guest-portal/dispute/route.ts',
+  'src/app/guest-rights/page.tsx',
   'src/components/MfaGate.tsx',
   'src/lib/cloudflare.ts',
   'workers/maintenance.ts',
@@ -47,6 +48,7 @@ const requiredFiles = [
   'middleware.ts',
   'scripts/deploy-and-capture.mjs',
   'scripts/finalize-workers-url.mjs',
+  'scripts/pin-production-url.mjs',
 ]
 for (const file of requiredFiles) if (!files.includes(join(root, file))) throw new Error(`Required product file missing: ${file}`)
 for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
@@ -54,8 +56,21 @@ for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts']) 
 const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
 if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
 
+const productionUrl = 'https://guestatlas.mosheschwartzberg.workers.dev'
 const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
-if (!goLive.includes('finalize-workers-url.mjs') || !goLive.includes('deploy-and-capture.mjs') || !goLive.includes('workers_dev_auto')) throw new Error('GO-LIVE.cmd must support streamed automatic workers.dev URL discovery')
+if (!goLive.includes('pin-production-url.mjs') || !goLive.includes('supabase config push')) throw new Error('GO-LIVE.cmd must pin the production URL and push hosted Supabase Auth config')
+const pinUrl = readFileSync(join(root, 'scripts/pin-production-url.mjs'), 'utf8')
+if (!pinUrl.includes(productionUrl) || !pinUrl.includes("workers_dev_resolved")) throw new Error('Production URL pin helper must enforce the final GuestAtlas workers.dev URL')
+
+const supabaseConfig = readFileSync(join(root, 'supabase/config.toml'), 'utf8')
+if (!supabaseConfig.includes(`site_url = "${productionUrl}"`)) throw new Error('Supabase Auth site_url must use the final GuestAtlas production URL')
+if (!supabaseConfig.includes(`additional_redirect_urls = ["${productionUrl}/auth/confirm"]`)) throw new Error('Supabase Auth redirect allowlist must include the GuestAtlas /auth/confirm route')
+if (/localhost:3000/.test(supabaseConfig)) throw new Error('Production Supabase config must not contain localhost:3000')
+
+const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8')
+if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
+const guestPortal = readFileSync(join(root, 'src/app/guest-portal/[token]/page.tsx'), 'utf8')
+if (!guestPortal.includes('/api/guest-portal/dispute') || !guestPortal.includes('Challenge / correction request')) throw new Error('Guest portal must retain record-level dispute submission controls')
 
 const deployCapture = readFileSync(join(root, 'scripts/deploy-and-capture.mjs'), 'utf8')
 if (deployCapture.includes("'npx.cmd'") || deployCapture.includes('"npx.cmd"')) throw new Error('Windows deploy capture must not spawn npx.cmd directly')
@@ -76,6 +91,6 @@ if (!wrangler.compatibility_flags?.includes('nodejs_compat')) throw new Error('C
 const evidenceBindings = (wrangler.r2_buckets || []).filter((b) => b.bucket_name === 'guestatlas-evidence')
 if (evidenceBindings.length !== 1 || evidenceBindings[0].binding !== 'EVIDENCE_BUCKET') throw new Error('GuestAtlas must have exactly one private evidence R2 binding named EVIDENCE_BUCKET')
 if (!wrangler.observability?.enabled) throw new Error('Cloudflare observability must be enabled')
-if (wrangler.workers_dev !== true) throw new Error('workers.dev must remain enabled for automatic first-deploy URL bootstrap')
+if (wrangler.workers_dev !== true) throw new Error('workers.dev must remain enabled for the production GuestAtlas Worker')
 
 console.log(`GuestAtlas Cloudflare source check passed (${files.length} files scanned).`)
