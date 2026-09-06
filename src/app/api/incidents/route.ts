@@ -5,6 +5,7 @@ import { WRITE_ROLES } from '@/lib/auth'
 import { hasLocalGuestRelationship } from '@/lib/access'
 import { encryptPII } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
+import { getEvidenceBucket, R2_EVIDENCE_PREFIX } from '@/lib/cloudflare'
 
 export const runtime = 'nodejs'
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
   let createdIncidentId: string | null = null
   let uploadedPath: string | null = null
   let adminForCleanup: any = null
+  let r2ForCleanup: ReturnType<typeof getEvidenceBucket> | null = null
   try {
     const { admin, hotel, user } = await apiContext(request, WRITE_ROLES)
     adminForCleanup = admin
@@ -50,7 +52,8 @@ export async function POST(request: Request) {
 
     const stayId = optionalString(form.get('stayId'), 60)
     if (stayId) {
-      const { data: stay } = await admin.from('stays').select('id').eq('id', stayId).eq('hotel_id', hotel.id).eq('guest_id', guestId).maybeSingle()
+      const { data: stay, error: stayError } = await admin.from('stays').select('id').eq('id', stayId).eq('hotel_id', hotel.id).eq('guest_id', guestId).maybeSingle()
+      if (stayError) throw stayError
       if (!stay) throw new ApiError(400, 'Selected stay does not belong to this guest and property')
     }
 
@@ -81,18 +84,31 @@ export async function POST(request: Request) {
       if (!validateFileSignature(bytes, file.type)) throw new ApiError(415, 'Evidence content does not match its declared file type')
       const hash = crypto.createHash('sha256').update(bytes).digest('hex')
       const originalName = file.name.slice(-240) || `evidence${MIME_EXT[file.type]}`
-      uploadedPath = `${hotel.id}/${incident.id}/${crypto.randomUUID()}${MIME_EXT[file.type]}`
-      const up = await admin.storage.from('incident-evidence').upload(uploadedPath, bytes, { contentType: file.type, upsert: false })
-      if (up.error) throw up.error
-      const { error: fileError } = await admin.from('evidence_files').insert({ incident_id: incident.id, hotel_id: hotel.id, storage_path: uploadedPath, file_name_cipher: encryptPII(originalName), mime_type: file.type, size_bytes: file.size, sha256: hash, uploaded_by: user.id })
+      uploadedPath = `${R2_EVIDENCE_PREFIX}${hotel.id}/${incident.id}/${crypto.randomUUID()}${MIME_EXT[file.type]}`
+      const bucket = getEvidenceBucket()
+      r2ForCleanup = bucket
+      await bucket.put(uploadedPath, bytes, {
+        httpMetadata: { contentType: file.type },
+        customMetadata: { sha256: hash, hotelId: hotel.id, incidentId: incident.id },
+      })
+      const { error: fileError } = await admin.from('evidence_files').insert({
+        incident_id: incident.id,
+        hotel_id: hotel.id,
+        storage_path: uploadedPath,
+        file_name_cipher: encryptPII(originalName),
+        mime_type: file.type,
+        size_bytes: file.size,
+        sha256: hash,
+        uploaded_by: user.id,
+      })
       if (fileError) throw fileError
     }
 
-    await audit(admin, { hotelId: hotel.id, userId: user.id, action: status === 'published' ? 'incident_published' : 'incident_submitted_for_review', targetType: 'incident', targetId: incident.id, metadata: { guestId, severity, category, evidenceLevel, hasEvidence: Boolean(uploadedPath) } })
+    await audit(admin, { hotelId: hotel.id, userId: user.id, action: status === 'published' ? 'incident_published' : 'incident_submitted_for_review', targetType: 'incident', targetId: incident.id, metadata: { guestId, severity, category, evidenceLevel, hasEvidence: Boolean(uploadedPath), evidenceBackend: uploadedPath ? 'cloudflare-r2' : null } })
     return NextResponse.redirect(new URL(status === 'pending_review' ? '/moderation' : '/incidents', request.url), 303)
   } catch (e) {
-    // Best-effort rollback for the DB + Storage sequence when evidence processing fails.
-    if (adminForCleanup && uploadedPath) { try { await adminForCleanup.storage.from('incident-evidence').remove([uploadedPath]) } catch {} }
+    // Best-effort rollback for the database + R2 sequence if later validation/persistence fails.
+    if (r2ForCleanup && uploadedPath) { try { await r2ForCleanup.delete(uploadedPath) } catch {} }
     if (adminForCleanup && createdIncidentId) { try { await adminForCleanup.from('incidents').delete().eq('id', createdIncidentId) } catch {} }
     return fail(e, request)
   }
