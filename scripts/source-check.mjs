@@ -45,12 +45,16 @@ const requiredFiles = [
   'open-next.config.ts',
   'GO-LIVE.cmd',
   'middleware.ts',
+  'scripts/finalize-workers-url.mjs',
 ]
 for (const file of requiredFiles) if (!files.includes(join(root, file))) throw new Error(`Required product file missing: ${file}`)
 for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
 
 const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
 if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
+
+const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
+if (!goLive.includes('finalize-workers-url.mjs') || !goLive.includes('workers_dev_auto')) throw new Error('GO-LIVE.cmd must support automatic workers.dev URL discovery')
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
@@ -63,5 +67,6 @@ const wrangler = JSON.parse(readFileSync(join(root, 'wrangler.jsonc'), 'utf8'))
 if (!wrangler.compatibility_flags?.includes('nodejs_compat')) throw new Error('Cloudflare nodejs_compat flag is required')
 if (!wrangler.r2_buckets?.some((b) => b.binding === 'EVIDENCE_BUCKET' && b.bucket_name === 'guestatlas-evidence')) throw new Error('Private GuestAtlas evidence R2 binding is missing')
 if (!wrangler.observability?.enabled) throw new Error('Cloudflare observability must be enabled')
+if (wrangler.workers_dev !== true) throw new Error('workers.dev must remain enabled for automatic first-deploy URL bootstrap')
 
 console.log(`GuestAtlas Cloudflare source check passed (${files.length} files scanned).`)
