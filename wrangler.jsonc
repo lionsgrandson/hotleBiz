@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "guestatlas",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "placement": {
+    "mode": "smart"
+  },
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "r2_buckets": [
+    {
+      "binding": "EVIDENCE_BUCKET",
+      "bucket_name": "guestatlas-evidence"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "secrets": {
+    "required": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "SUPABASE_SECRET_KEY",
+      "PII_ENCRYPTION_KEY",
+      "MATCHING_SECRET",
+      "AUDIT_HASH_SECRET",
+      "NEXT_PUBLIC_APP_URL",
+      "REQUIRE_MFA",
+      "CRON_SECRET"
+    ]
+  }
+}
