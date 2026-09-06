@@ -61,34 +61,41 @@ Incidents do **not** secretly reduce the numerical score. They remain separate r
 
 ## One-click Windows production release
 
-1. Install Node.js 22+, npm and Git.
-2. Create a Supabase project and copy its project URL, publishable key, server secret key and project ref.
-3. Have a Cloudflare account. An API token/account ID are optional; without them Wrangler opens interactive login.
-4. Run `configure.cmd` and enter the values. The wizard generates the encryption, matching, audit and cron secrets.
-5. Run **`GO-LIVE.cmd`**.
+1. Have a Cloudflare account and a Supabase project.
+2. Put your local `.env.local` beside `GO-LIVE.cmd`, or run `configure.cmd` once. The server secret stays local and `.env.local` is gitignored.
+3. You do **not** need to know your GuestAtlas URL ahead of time. Leave the URL in automatic mode.
+4. Run **`GO-LIVE.cmd`**.
 
-`GO-LIVE.cmd` does all of the following in order:
+If Git or Node.js 22+ are missing and Windows `winget` is available, `GO-LIVE.cmd` installs them automatically.
 
-1. Installs exact dependencies (`npm ci` when a lockfile exists, otherwise `npm install`).
-2. Validates environment/source integrity.
-3. Runs TypeScript and the cryptography/scoring self-tests.
-4. Authenticates Wrangler.
-5. Creates/verifies the private `guestatlas-evidence` R2 bucket.
-6. Builds the complete OpenNext Cloudflare Worker.
-7. Runs a Wrangler dry-run bundle validation.
-8. Commits and pushes the exact validated source to GitHub `main`.
-9. Links Supabase and applies migrations.
-10. Verifies the Postgres schema.
-11. Creates sanitized Worker secret bundles that exclude deployment credentials.
-12. Deploys the GuestAtlas application Worker and optional custom domain.
-13. Deploys the scheduled `guestatlas-maintenance` Worker.
-14. Deletes temporary secret bundles.
+For a first deployment without a custom domain, GuestAtlas uses a controlled bootstrap origin only for the initial Worker upload. Cloudflare assigns a URL in the form `https://guestatlas.<account-subdomain>.workers.dev`. The deploy script captures that URL from Wrangler, rewrites `.env.local`, rebuilds the application with the real canonical origin, validates the final Worker bundle again, and deploys the final configuration. No production URL needs to be entered manually.
+
+`GO-LIVE.cmd` does all of the following:
+
+1. Syncs GitHub `main` before validation while preserving tracked local edits with autostash.
+2. Installs exact dependencies.
+3. Runs the production dependency vulnerability gate.
+4. Validates environment/source integrity.
+5. Runs TypeScript and cryptography/scoring self-tests.
+6. Authenticates Wrangler.
+7. Creates/verifies the private `guestatlas-evidence` R2 bucket.
+8. Builds the complete OpenNext Cloudflare Worker.
+9. Runs Wrangler dry-run validation for both Workers.
+10. Commits and pushes the exact validated source to GitHub `main`.
+11. Links Supabase, applies migrations and verifies the Postgres schema.
+12. If needed, performs the temporary first Worker deployment and automatically discovers the assigned `workers.dev` origin.
+13. Rewrites local environment configuration with that origin, rebuilds and revalidates.
+14. Deploys the final GuestAtlas application Worker.
+15. Deploys the scheduled `guestatlas-maintenance` Worker.
+16. Deletes temporary deployment logs and secret bundles.
+
+If you later want a custom domain, set `NEXT_PUBLIC_APP_URL=https://your-host.example.com`, set `GUESTATLAS_URL_MODE=fixed`, and set `CLOUDFLARE_CUSTOM_DOMAIN=your-host.example.com`, then rerun `GO-LIVE.cmd`.
 
 `deploy.cmd` is kept as a compatibility alias and calls `GO-LIVE.cmd`.
 
 ## Supabase Auth after first deployment
 
-Set the Supabase Auth Site URL to `NEXT_PUBLIC_APP_URL` and allow `NEXT_PUBLIC_APP_URL/auth/confirm`.
+After `GO-LIVE.cmd` prints the final application URL, set the Supabase Auth Site URL to that value and allow `<final-url>/auth/confirm`.
 
 For the **Confirm signup** email template use:
 
