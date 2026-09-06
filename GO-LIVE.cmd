@@ -140,9 +140,12 @@ if not defined SUPABASE_PROJECT_REF (
 )
 if not defined SUPABASE_PROJECT_REF (echo [ERROR] SUPABASE_PROJECT_REF is required. & goto :fail)
 
-echo [15/21] Linking Supabase, syncing hosted Auth config, and applying migrations...
+echo [15/21] Linking Supabase and applying database migrations only...
 call npx supabase link --project-ref "%SUPABASE_PROJECT_REF%" || goto :fail
-call npx supabase config push || goto :fail
+rem IMPORTANT: Do not run "supabase config push" here.
+rem It syncs unrelated hosted API/Auth/Storage settings and can trigger paid-only
+rem Storage/Vector feature checks. GuestAtlas free-tier deployment only needs
+rem Postgres migrations here; hosted Auth URL settings are managed separately.
 call npx supabase db push || goto :fail
 
 echo [16/21] Verifying deployed Postgres schema...
@@ -202,10 +205,13 @@ echo Evidence storage:       private Cloudflare R2 / guestatlas-evidence
 echo Scheduled retention:    guestatlas-maintenance Worker, daily 02:15 UTC
 echo Database and Auth:       Supabase Postgres + Auth behind the Worker
 echo Source:                  pushed to GitHub main after validation
+echo Supabase config push:    SKIPPED intentionally to avoid paid/optional services
 echo.
-echo Supabase Auth synced from supabase/config.toml:
+echo Verify these FREE Supabase Auth settings in the Dashboard:
 echo   Site URL = %NEXT_PUBLIC_APP_URL%
 echo   Redirect = %NEXT_PUBLIC_APP_URL%/auth/confirm
+echo   TOTP MFA enrollment and verification = enabled
+echo   Confirm email = enabled
 echo.
 echo Platform admin: %NEXT_PUBLIC_APP_URL%/platform
 echo Hotel dashboard: %NEXT_PUBLIC_APP_URL%/dashboard
