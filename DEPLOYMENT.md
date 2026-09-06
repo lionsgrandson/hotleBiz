@@ -8,22 +8,22 @@ Supabase provides Postgres and Auth behind the Worker. The browser only uses the
 
 ## Fastest Windows deployment
 
-Run:
+Put `.env.local` beside the scripts if you already have one, then run:
 
 ```text
-configure.cmd
 GO-LIVE.cmd
 ```
 
-`deploy.cmd` is an alias for `GO-LIVE.cmd`.
+If `.env.local` is missing, `GO-LIVE.cmd` automatically opens `configure.cmd`. `deploy.cmd` is an alias for `GO-LIVE.cmd`.
+
+You do **not** need to know your GuestAtlas production URL before the first deployment. If no custom domain is supplied, the configuration uses automatic Workers.dev mode. Cloudflare assigns a URL such as `https://guestatlas.<account-subdomain>.workers.dev`; the deploy script captures it, updates `.env.local`, rebuilds with the real canonical origin, dry-runs the final bundle again, and redeploys.
 
 ### Prerequisites
 
-- Node.js 22+
-- npm
-- Git
 - Cloudflare account with Workers/R2 enabled
 - Supabase project
+
+Git and Node.js 22+ are installed automatically through Windows `winget` when missing and available.
 
 If `CLOUDFLARE_API_TOKEN` is absent, Wrangler opens browser login. If `SUPABASE_ACCESS_TOKEN` is absent, the Supabase CLI prompts login.
 
@@ -31,28 +31,32 @@ If `CLOUDFLARE_API_TOKEN` is absent, Wrangler opens browser login. If `SUPABASE_
 
 The script is fail-fast and stops at the first error:
 
-1. Installs pinned dependencies.
-2. Loads `.env.local` and validates secrets/origins.
-3. Runs source integrity checks.
-4. Runs TypeScript checks.
-5. Runs application self-tests.
-6. Authenticates Cloudflare.
-7. Creates or verifies `guestatlas-evidence` R2.
-8. Runs the OpenNext Cloudflare production build.
-9. Runs `wrangler deploy --dry-run` against the generated Worker bundle.
-10. Commits/pulls/rebases/pushes the exact validated source to GitHub `main`.
-11. Links the Supabase project and applies migrations.
-12. Verifies the expected Postgres schema.
-13. Builds sanitized JSON secret bundles. Cloudflare/Supabase deployment tokens are never copied into Worker runtime secrets.
-14. Deploys the main GuestAtlas Worker. If `CLOUDFLARE_CUSTOM_DOMAIN` is configured, it is attached as a Cloudflare Custom Domain.
-15. Deploys `guestatlas-maintenance` with the daily `15 2 * * *` Cron Trigger.
+1. Syncs GitHub `main` before validation, preserving tracked local edits with autostash.
+2. Installs pinned dependencies.
+3. Runs the high/critical runtime dependency vulnerability gate.
+4. Loads `.env.local` and validates secrets/origin mode.
+5. Runs source integrity checks.
+6. Runs TypeScript checks.
+7. Runs application self-tests.
+8. Authenticates Cloudflare.
+9. Creates or verifies `guestatlas-evidence` R2.
+10. Runs the OpenNext Cloudflare production build.
+11. Runs dry-run validation against both generated Worker bundles.
+12. Commits and pushes the exact validated source to GitHub `main`.
+13. Links the Supabase project, applies migrations and verifies the expected Postgres schema.
+14. When using automatic Workers.dev mode, performs a temporary first Worker deployment and captures the assigned public URL from Wrangler output.
+15. Rewrites local environment configuration to the assigned URL, rebuilds and dry-runs again.
+16. Deploys the final GuestAtlas application Worker.
+17. Deploys `guestatlas-maintenance` with the daily `15 2 * * *` Cron Trigger.
+18. Deletes temporary deployment logs and secret bundles.
 
-Temporary secret bundle files are deleted both after success and after failure.
+The server secret, encryption keys, matching key, audit key and deployment credentials remain in local/Cloudflare secret storage and are not committed.
 
 ## Cloudflare configuration
 
 `wrangler.jsonc` is the source of truth for the application Worker:
 
+- `workers_dev` remains enabled so the first deployment can receive a Cloudflare-managed public origin.
 - `nodejs_compat` is enabled for Next.js/OpenNext and Node crypto compatibility.
 - `EVIDENCE_BUCKET` binds private R2 bucket `guestatlas-evidence`.
 - Smart Placement is enabled because application requests frequently call external database/auth services.
@@ -67,25 +71,43 @@ All new evidence uses R2 paths prefixed with `r2/`. The evidence download route 
 
 Existing evidence rows without the `r2/` prefix are treated as legacy Supabase Storage objects and remain readable through the authenticated route. This makes the Cloudflare migration non-destructive. No public R2 bucket or public evidence URL is required.
 
-## Custom domain
+## Automatic Workers.dev URL
 
-Set both values consistently in `.env.local`:
+For the first deployment without a custom domain, `.env.local` uses:
+
+```text
+NEXT_PUBLIC_APP_URL=https://guestatlas-bootstrap.invalid
+GUESTATLAS_URL_MODE=workers_dev_auto
+CLOUDFLARE_CUSTOM_DOMAIN=
+```
+
+That bootstrap hostname is never intended for users. It is accepted only while automatic discovery is enabled. After the temporary Worker deploy, `scripts/finalize-workers-url.mjs` extracts the real `https://guestatlas.<account-subdomain>.workers.dev` origin from Wrangler output and changes the local file to:
+
+```text
+NEXT_PUBLIC_APP_URL=https://guestatlas.<account-subdomain>.workers.dev
+GUESTATLAS_URL_MODE=workers_dev_resolved
+```
+
+GuestAtlas is then rebuilt and redeployed with that real URL.
+
+## Custom domain later
+
+When you are ready to move away from Workers.dev, set these values consistently in `.env.local`:
 
 ```text
 NEXT_PUBLIC_APP_URL=https://guestatlas.example.com
+GUESTATLAS_URL_MODE=fixed
 CLOUDFLARE_CUSTOM_DOMAIN=guestatlas.example.com
 ```
 
 The custom domain value is a hostname only, with no scheme/path/port. The domain must be in a Cloudflare zone available to the authenticated account.
 
-If no custom domain is configured, the application remains available on its Workers.dev hostname after deployment.
-
 ## Supabase Auth setup
 
-After the first deployment:
+After the first deployment, use the final URL printed by `GO-LIVE.cmd`:
 
-1. Set Auth Site URL to `NEXT_PUBLIC_APP_URL`.
-2. Allow `NEXT_PUBLIC_APP_URL/auth/confirm` as a redirect.
+1. Set Auth Site URL to that URL.
+2. Allow `<final-url>/auth/confirm` as a redirect.
 3. Set the Confirm signup template link to:
 
 ```text
