@@ -27,9 +27,9 @@ jobs:
           parts=(.guestatlas-bootstrap.part-*)
           test "${#parts[@]}" -eq 12
           cat "${parts[@]}" | base64 -d > /tmp/guestatlas-source.tar.gz
-          echo '8266738ccb4c03ea67099d14dc0133f2138f97470c0c06ed3b76ccecbb895c67  /tmp/guestatlas-source.tar.gz' | sha256sum -c -
+          echo '4e56c97e3430cce91cee1dfb7be4e7f615ea2b87aa6ac541580d9afe819e1c99  /tmp/guestatlas-source.tar.gz' | sha256sum -c -
           tar -xzf /tmp/guestatlas-source.tar.gz -C .
-          rm -f .guestatlas-bootstrap.ready .guestatlas-bootstrap.part-*
+          rm -f .guestatlas-bootstrap.ready .guestatlas-bootstrap.part-* .github/workflows/bootstrap.yml
 
       - name: Commit materialized application
         shell: bash
