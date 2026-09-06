@@ -45,6 +45,7 @@ const requiredFiles = [
   'open-next.config.ts',
   'GO-LIVE.cmd',
   'middleware.ts',
+  'scripts/deploy-and-capture.mjs',
   'scripts/finalize-workers-url.mjs',
 ]
 for (const file of requiredFiles) if (!files.includes(join(root, file))) throw new Error(`Required product file missing: ${file}`)
@@ -54,7 +55,7 @@ const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
 if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
 
 const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
-if (!goLive.includes('finalize-workers-url.mjs') || !goLive.includes('workers_dev_auto')) throw new Error('GO-LIVE.cmd must support automatic workers.dev URL discovery')
+if (!goLive.includes('finalize-workers-url.mjs') || !goLive.includes('deploy-and-capture.mjs') || !goLive.includes('workers_dev_auto')) throw new Error('GO-LIVE.cmd must support streamed automatic workers.dev URL discovery')
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
