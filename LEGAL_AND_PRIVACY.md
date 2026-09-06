@@ -17,7 +17,7 @@ Before launch, Israeli counsel should determine at minimum:
 - The lawful basis and notices for collection from hotels and disclosure to other hotels.
 - Right of access, correction, deletion/objection procedures and identity verification.
 - Defamation, consumer-contract, discrimination and unfair-business-practice exposure from adverse guest reports.
-- International hosting/transfer requirements if Supabase/Vercel regions or hotel users are outside Israel.
+- International hosting/transfer requirements for the selected Cloudflare Worker/R2 and Supabase regions and for participating hotels outside Israel.
 
 ## Product policy recommended for counsel to preserve
 
@@ -34,7 +34,15 @@ Before launch, Israeli counsel should determine at minimum:
 
 ## Retention
 
-The database includes configurable hotel retention periods and a retention queue. It intentionally does not silently delete substantive guest/incident records on a generic timer, because the correct retention period depends on legal basis, claims limitation periods, disputes and jurisdiction. `queue_retention_candidates()` identifies records for review. `prune_old_audit_logs()` implements a 24-month cutoff for technical audit records but is not auto-scheduled; enable it only after counsel confirms that this fits the deployed database's obligations.
+The database includes configurable hotel retention periods and a retention queue. It intentionally does not silently delete substantive guest/incident records on a generic timer, because the correct retention period depends on legal basis, claims limitation periods, disputes and jurisdiction. `queue_retention_candidates()` identifies records for review. The Cloudflare maintenance Worker refreshes candidates daily; it does not automatically erase substantive guest records. `prune_old_audit_logs()` implements a 24-month cutoff for technical audit records but is not auto-scheduled; enable it only after counsel confirms that this fits the deployed database's obligations.
+
+## Infrastructure/privacy review items
+
+- Confirm the selected Cloudflare and Supabase account/region configuration meets applicable transfer and data-residency requirements.
+- Keep the R2 evidence bucket private and do not expose a public/custom bucket domain.
+- Review Cloudflare and Supabase subprocessors, contractual terms and data-processing agreements for the actual commercial launch.
+- Define retention/deletion procedures for R2 objects together with their corresponding database evidence records.
+- Define incident-response procedures that cover both Cloudflare and Supabase access credentials, logs and backups.
 
 ## Source links reviewed during implementation
 
