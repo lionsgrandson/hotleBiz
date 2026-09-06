@@ -12,7 +12,7 @@ export async function audit(admin: SupabaseClient, args: {
   metadata?: Record<string, unknown>
 }) {
   const h = await headers()
-  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'unknown'
+  const ip = h.get('cf-connecting-ip') || h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'unknown'
   const ua = h.get('user-agent') || 'unknown'
   const { error } = await admin.from('audit_logs').insert({
     hotel_id: args.hotelId || null,
