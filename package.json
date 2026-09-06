@@ -1,6 +1,6 @@
 {
   "name": "guestatlas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,10 +10,14 @@
     "verify": "node scripts/check-env.mjs && node scripts/verify-schema.mjs",
     "seed": "node scripts/seed-demo.mjs",
     "configure": "node scripts/configure.mjs",
-    "sync-vercel-env": "node scripts/sync-vercel-env.mjs",
     "self-test": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/self-test.mjs",
     "source-check": "node scripts/source-check.mjs",
-    "check": "npm run source-check && npm run typecheck && npm run self-test && npm run build"
+    "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare deploy",
+    "cf:dry-run": "opennextjs-cloudflare build && wrangler deploy --dry-run --outdir .cloudflare-dry-run",
+    "check": "npm run source-check && npm run typecheck && npm run self-test && npm run cf:build"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.6",
@@ -23,12 +27,13 @@
     "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.6",
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "supabase": "2.116.0",
     "typescript": "7.0.2",
-    "vercel": "59.11.7"
+    "wrangler": "4.129.0"
   },
   "engines": {
     "node": ">=22.0.0"
