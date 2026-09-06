@@ -45,6 +45,11 @@ if not exist .env.local (
   call configure.cmd || goto :fail
 )
 if not exist .env.local (echo [ERROR] Configuration did not create .env.local. & goto :fail)
+
+rem GuestAtlas now has a permanent production workers.dev URL. Keep the local
+rem environment pinned to it so Auth, invite links, guest portal links and Cron
+rem calls never fall back to localhost or the old bootstrap origin.
+call node scripts\pin-production-url.mjs ".env.local" || goto :fail
 call :load_env || goto :fail
 
 set "AUTO_WORKERS_DEV=0"
@@ -135,8 +140,9 @@ if not defined SUPABASE_PROJECT_REF (
 )
 if not defined SUPABASE_PROJECT_REF (echo [ERROR] SUPABASE_PROJECT_REF is required. & goto :fail)
 
-echo [15/21] Linking Supabase and applying database migrations...
+echo [15/21] Linking Supabase, syncing hosted Auth config, and applying migrations...
 call npx supabase link --project-ref "%SUPABASE_PROJECT_REF%" || goto :fail
+call npx supabase config push || goto :fail
 call npx supabase db push || goto :fail
 
 echo [16/21] Verifying deployed Postgres schema...
@@ -167,7 +173,7 @@ if "%AUTO_WORKERS_DEV%"=="1" (
   echo [20/21] Deploying final GuestAtlas Worker with resolved workers.dev URL...
   call npx opennextjs-cloudflare deploy --secrets-file "%CF_SECRETS%" || goto :fail
 ) else (
-  echo [17/21] URL already resolved or custom domain configured. No bootstrap deploy required.
+  echo [17/21] Production URL already resolved. No bootstrap deploy required.
   echo [18/21] Final environment already validated.
   echo [19/21] Final Worker bundle already dry-run validated.
   echo [20/21] Deploying GuestAtlas application Worker...
@@ -197,10 +203,13 @@ echo Scheduled retention:    guestatlas-maintenance Worker, daily 02:15 UTC
 echo Database and Auth:       Supabase Postgres + Auth behind the Worker
 echo Source:                  pushed to GitHub main after validation
 echo.
-echo Required Supabase Auth setting:
+echo Supabase Auth synced from supabase/config.toml:
 echo   Site URL = %NEXT_PUBLIC_APP_URL%
 echo   Redirect = %NEXT_PUBLIC_APP_URL%/auth/confirm
 echo.
+echo Platform admin: %NEXT_PUBLIC_APP_URL%/platform
+echo Hotel dashboard: %NEXT_PUBLIC_APP_URL%/dashboard
+echo Guest rights:    %NEXT_PUBLIC_APP_URL%/guest-rights
 echo Health endpoint: %NEXT_PUBLIC_APP_URL%/api/health
 echo =============================================================
 pause
