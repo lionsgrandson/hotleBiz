@@ -1,0 +1,43 @@
+name: Materialize GuestAtlas source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.guestatlas-bootstrap.ready'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct reviewed source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .guestatlas-bootstrap.part-00
+          test -f .guestatlas-bootstrap.part-01
+          test -f .guestatlas-bootstrap.part-02
+          test -f .guestatlas-bootstrap.part-03
+          cat .guestatlas-bootstrap.part-* | base64 -d > /tmp/guestatlas-source.tar.gz
+          echo '8266738ccb4c03ea67099d14dc0133f2138f97470c0c06ed3b76ccecbb895c67  /tmp/guestatlas-source.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/guestatlas-source.tar.gz -C .
+          rm -f .guestatlas-bootstrap.ready .guestatlas-bootstrap.part-*
+
+      - name: Commit materialized application
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Materialize GuestAtlas application'
+          git push origin HEAD:main
