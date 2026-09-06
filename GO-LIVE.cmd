@@ -27,24 +27,27 @@ for /f "usebackq tokens=1,* delims==" %%A in (".env.local") do (
   if not "%%A"=="" if not "%%A:~0,1"=="#" set "%%A=%%B"
 )
 
-echo [1/15] Installing exact project dependencies...
+echo [1/16] Installing exact project dependencies...
 if exist package-lock.json (
   call npm ci --no-audit --no-fund || goto :fail
 ) else (
   call npm install --no-audit --no-fund || goto :fail
 )
 
-echo [2/15] Validating environment and source integrity...
+echo [2/16] Validating environment and source integrity...
 call node scripts/check-env.mjs || goto :fail
 call npm run source-check || goto :fail
 
-echo [3/15] Typechecking application...
+echo [3/16] Typechecking application...
 call npm run typecheck || goto :fail
 
-echo [4/15] Running scoring, encryption and matching self-tests...
+echo [4/16] Running scoring, encryption and matching self-tests...
 call npm run self-test || goto :fail
 
-echo [5/15] Authenticating Cloudflare Wrangler...
+echo [5/16] Preparing allow-listed Cloudflare runtime secrets...
+call node scripts/build-cloudflare-secrets.mjs .env.local || goto :fail
+
+echo [6/16] Authenticating Cloudflare Wrangler...
 call npx wrangler whoami >nul 2>&1
 if errorlevel 1 (
   if defined CLOUDFLARE_API_TOKEN (
@@ -56,7 +59,7 @@ if errorlevel 1 (
   call npx wrangler whoami || goto :fail
 )
 
-echo [6/15] Ensuring private R2 evidence bucket exists...
+echo [7/16] Ensuring private R2 evidence bucket exists...
 call npx wrangler r2 bucket list > "%TEMP%\guestatlas-r2.txt" || goto :fail
 findstr /I /C:"guestatlas-evidence" "%TEMP%\guestatlas-r2.txt" >nul
 if errorlevel 1 (
@@ -66,14 +69,17 @@ call npx wrangler r2 bucket list > "%TEMP%\guestatlas-r2.txt" || goto :fail
 findstr /I /C:"guestatlas-evidence" "%TEMP%\guestatlas-r2.txt" >nul || (echo [ERROR] guestatlas-evidence R2 bucket was not found after provisioning. & goto :fail)
 del /q "%TEMP%\guestatlas-r2.txt" >nul 2>&1
 
-echo [7/15] Building the Next.js application for Cloudflare Workers...
+echo [8/16] Building the Next.js application for Cloudflare Workers...
 call npm run cf:build || goto :fail
 
-echo [8/15] Running Wrangler production bundle dry-run...
+echo [9/16] Dry-running the application Worker with production secret names...
 if exist .cloudflare-dry-run rmdir /s /q .cloudflare-dry-run
-call npx wrangler deploy --dry-run --outdir .cloudflare-dry-run || goto :fail
+call npx wrangler deploy --dry-run --secrets-file "%CF_SECRETS%" --outdir .cloudflare-dry-run || goto :fail
 
-echo [9/15] Committing and pushing the exact validated source to GitHub main...
+echo [10/16] Dry-running the scheduled maintenance Worker...
+call npx wrangler deploy --config wrangler.maintenance.jsonc --dry-run --secrets-file "%MAINT_SECRETS%" || goto :fail
+
+echo [11/16] Committing and pushing the exact validated source to GitHub main...
 call git add -A || goto :fail
 call git diff --cached --quiet
 if errorlevel 1 (
@@ -82,7 +88,7 @@ if errorlevel 1 (
 call git pull --rebase origin main || goto :fail
 call git push origin HEAD:main || goto :fail
 
-echo [10/15] Authenticating Supabase CLI...
+echo [12/16] Authenticating Supabase CLI...
 call npx supabase --version || goto :fail
 if not defined SUPABASE_ACCESS_TOKEN (
   call npx supabase login || goto :fail
@@ -92,17 +98,14 @@ if not defined SUPABASE_PROJECT_REF (
 )
 if not defined SUPABASE_PROJECT_REF (echo [ERROR] SUPABASE_PROJECT_REF is required. & goto :fail)
 
-echo [11/15] Linking Supabase and applying database migrations...
+echo [13/16] Linking Supabase and applying database migrations...
 call npx supabase link --project-ref "%SUPABASE_PROJECT_REF%" || goto :fail
 call npx supabase db push || goto :fail
 
-echo [12/15] Verifying deployed Postgres schema...
+echo [14/16] Verifying deployed Postgres schema...
 call npm run verify || goto :fail
 
-echo [13/15] Preparing sanitized Worker secrets...
-call node scripts/build-cloudflare-secrets.mjs .env.local || goto :fail
-
-echo [14/15] Deploying GuestAtlas application Worker...
+echo [15/16] Deploying GuestAtlas application Worker...
 if defined CLOUDFLARE_CUSTOM_DOMAIN (
   echo Attaching Cloudflare custom domain: %CLOUDFLARE_CUSTOM_DOMAIN%
   call npx opennextjs-cloudflare deploy --secrets-file "%CF_SECRETS%" --domain "%CLOUDFLARE_CUSTOM_DOMAIN%" || goto :fail
@@ -110,7 +113,7 @@ if defined CLOUDFLARE_CUSTOM_DOMAIN (
   call npx opennextjs-cloudflare deploy --secrets-file "%CF_SECRETS%" || goto :fail
 )
 
-echo [15/15] Deploying Cloudflare scheduled maintenance Worker...
+echo [16/16] Deploying Cloudflare scheduled maintenance Worker...
 call npx wrangler deploy --config wrangler.maintenance.jsonc --secrets-file "%MAINT_SECRETS%" || goto :fail
 
 if exist "%CF_SECRETS%" del /q "%CF_SECRETS%"
@@ -138,6 +141,7 @@ exit /b 0
 :fail
 if exist "%CF_SECRETS%" del /q "%CF_SECRETS%" >nul 2>&1
 if exist "%MAINT_SECRETS%" del /q "%MAINT_SECRETS%" >nul 2>&1
+if exist "%TEMP%\guestatlas-r2.txt" del /q "%TEMP%\guestatlas-r2.txt" >nul 2>&1
 echo.
 echo =============================================================
 echo [FAILED] GuestAtlas deployment stopped safely.
