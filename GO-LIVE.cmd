@@ -92,7 +92,9 @@ echo [8/21] Ensuring private R2 evidence bucket exists...
 call npx wrangler r2 bucket list > "%TEMP%\guestatlas-r2.txt" || goto :fail
 findstr /I /C:"guestatlas-evidence" "%TEMP%\guestatlas-r2.txt" >nul
 if errorlevel 1 (
-  call npx wrangler r2 bucket create guestatlas-evidence || goto :fail
+  rem Disable Wrangler's experimental auto-provisioning here. The EVIDENCE_BUCKET
+  rem binding is already committed in wrangler.jsonc and must not be duplicated.
+  call npx wrangler r2 bucket create guestatlas-evidence --experimental-provision=false --experimental-auto-create=false || goto :fail
 )
 call npx wrangler r2 bucket list > "%TEMP%\guestatlas-r2.txt" || goto :fail
 findstr /I /C:"guestatlas-evidence" "%TEMP%\guestatlas-r2.txt" >nul || (echo [ERROR] guestatlas-evidence R2 bucket was not found after provisioning. & goto :fail)
@@ -125,6 +127,7 @@ call git push origin HEAD:main || (
 echo [14/21] Authenticating Supabase CLI...
 call npx supabase --version || goto :fail
 if not defined SUPABASE_ACCESS_TOKEN (
+  call :repair_supabase_profile || goto :fail
   call npx supabase login || goto :fail
 )
 if not defined SUPABASE_PROJECT_REF (
@@ -201,6 +204,17 @@ echo.
 echo Health endpoint: %NEXT_PUBLIC_APP_URL%/api/health
 echo =============================================================
 pause
+exit /b 0
+
+:repair_supabase_profile
+set "SUPABASE_LEGACY_PROFILE=%USERPROFILE%\.supabase\profile"
+if exist "%SUPABASE_LEGACY_PROFILE%" (
+  set "SUPABASE_PROFILE_BACKUP=%USERPROFILE%\.supabase\profile.guestatlas-backup-%RANDOM%"
+  echo [SUPABASE] Found a legacy CLI profile file that can break current Supabase CLI on Windows.
+  echo [SUPABASE] Backing it up before login...
+  move /Y "%SUPABASE_LEGACY_PROFILE%" "!SUPABASE_PROFILE_BACKUP!" >nul || exit /b 1
+  echo [SUPABASE] Legacy profile backed up safely.
+)
 exit /b 0
 
 :load_env
