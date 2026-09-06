@@ -21,6 +21,7 @@ jobs:
       MATCHING_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       AUDIT_HASH_SECRET: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
       NEXT_PUBLIC_APP_URL: https://guestatlas.example.com
+      CLOUDFLARE_CUSTOM_DOMAIN: guestatlas.example.com
       REQUIRE_MFA: 'true'
       CRON_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       EMAIL_FROM: GuestAtlas CI <noreply@example.com>
@@ -37,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Runtime dependency security gate
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Create CI environment file
         shell: bash
         run: |
@@ -48,11 +52,13 @@ jobs:
           MATCHING_SECRET=$MATCHING_SECRET
           AUDIT_HASH_SECRET=$AUDIT_HASH_SECRET
           NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+          CLOUDFLARE_CUSTOM_DOMAIN=$CLOUDFLARE_CUSTOM_DOMAIN
           REQUIRE_MFA=$REQUIRE_MFA
           CRON_SECRET=$CRON_SECRET
           EMAIL_FROM=$EMAIL_FROM
           PLATFORM_ADMIN_EMAILS=$PLATFORM_ADMIN_EMAILS
           EOF
+          node scripts/check-env.mjs --production
           node scripts/build-cloudflare-secrets.mjs .env.local
 
       - name: Source integrity
