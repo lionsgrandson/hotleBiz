@@ -10,6 +10,7 @@ node_modules
 .cloudflare.secrets.tmp.json
 .maintenance.secrets.tmp.json
 .vercel
+supabase/.temp/
 *.log
 .DS_Store
 coverage
