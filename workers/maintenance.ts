@@ -3,6 +3,10 @@ interface Env {
   CRON_SECRET: string
 }
 
+type ExecutionContextLike = {
+  waitUntil(promise: Promise<unknown>): void
+}
+
 async function runRetention(env: Env) {
   const endpoint = new URL('/api/cron/retention', env.APP_URL)
   const response = await fetch(endpoint, {
@@ -19,7 +23,7 @@ async function runRetention(env: Env) {
 }
 
 export default {
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(_controller: unknown, env: Env, ctx: ExecutionContextLike) {
     ctx.waitUntil(runRetention(env))
   },
   async fetch(_request: Request) {
