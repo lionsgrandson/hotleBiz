@@ -5,6 +5,15 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 const rl = createInterface({ input, output })
 const clean = (value='') => String(value).replace(/[\r\n]/g, '').trim()
+
+// These values are intentionally safe to keep in source. Supabase publishable keys are
+// browser-facing credentials; the server secret is NEVER committed and remains local-only.
+const defaults = {
+  NEXT_PUBLIC_SUPABASE_URL: 'https://dcyzzfhvazavhcrgdlmo.supabase.co',
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_acYHRkPvi1VsM8ovbQ2FpQ_PL4tK-PH',
+  SUPABASE_PROJECT_REF: 'dcyzzfhvazavhcrgdlmo',
+}
+
 const current = {}
 if (existsSync('.env.local')) {
   for (const raw of readFileSync('.env.local','utf8').split(/\r?\n/)) {
@@ -14,44 +23,76 @@ if (existsSync('.env.local')) {
     if(i>0) current[line.slice(0,i).trim()] = line.slice(i+1).trim()
   }
 }
+
 async function ask(label, key, fallback='') {
-  const old=current[key] || fallback
+  const old=current[key] || defaults[key] || fallback
   const hidden = key.includes('KEY') || key.includes('SECRET') || key.includes('TOKEN')
   const suffix=old ? ` [${hidden ? 'keep existing' : old}]` : ''
   const answer=clean(await rl.question(`${label}${suffix}: `))
   return answer || old
 }
-function suggestedDomain(appUrl) {
-  try {
-    const u = new URL(appUrl)
-    if (u.protocol === 'https:' && u.hostname && !u.hostname.endsWith('.workers.dev')) return u.hostname
-  } catch {}
-  return ''
+
+async function askOptional(label, key) {
+  const old=current[key] || ''
+  const hidden = key.includes('KEY') || key.includes('SECRET') || key.includes('TOKEN')
+  const suffix=old ? ` [${hidden ? 'keep existing' : old}]` : ''
+  const answer=clean(await rl.question(`${label}${suffix}: `))
+  return answer || old
 }
+
 async function main(){
   console.log('\nGuestAtlas configuration wizard')
-  console.log('This writes .env.local. High-entropy application secrets are generated automatically.\n')
+  console.log('This writes .env.local. High-entropy application secrets are generated automatically.')
+  console.log('Leave the production URL blank to let the first Cloudflare deploy discover your workers.dev URL automatically.\n')
+
   if (existsSync('.env.local')) {
     const answer=clean(await rl.question('.env.local already exists. Update it? [y/N]: ')).toLowerCase()
     if(!['y','yes'].includes(answer)){ console.log('No changes made.'); return }
   }
+
   const supabaseUrl=await ask('Supabase project URL','NEXT_PUBLIC_SUPABASE_URL')
   const publishable=await ask('Supabase publishable key','NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
   const secret=await ask('Supabase server secret key','SUPABASE_SECRET_KEY')
   const projectRef=await ask('Supabase project ref','SUPABASE_PROJECT_REF')
-  const appUrl=await ask('Production app URL (for example https://guestatlas.example.com)','NEXT_PUBLIC_APP_URL','http://localhost:3000')
-  const adminEmails=await ask('Bootstrap platform admin email(s), comma separated; optional','PLATFORM_ADMIN_EMAILS')
-  const resend=await ask('Resend API key; optional','RESEND_API_KEY')
+
+  const existingMode=current.GUESTATLAS_URL_MODE || ''
+  let appUrl=''
+  let urlMode='workers_dev_auto'
+  if (existingMode === 'workers_dev_resolved' && current.NEXT_PUBLIC_APP_URL?.endsWith('.workers.dev')) {
+    appUrl = current.NEXT_PUBLIC_APP_URL
+    urlMode = 'workers_dev_resolved'
+    console.log(`Using previously discovered workers.dev URL: ${appUrl}`)
+  } else {
+    appUrl=await askOptional('Production app URL; leave blank for automatic workers.dev','NEXT_PUBLIC_APP_URL')
+    if (!appUrl || appUrl === 'https://guestatlas-bootstrap.invalid') {
+      appUrl='https://guestatlas-bootstrap.invalid'
+      urlMode='workers_dev_auto'
+    } else {
+      appUrl=appUrl.replace(/\/$/,'')
+      urlMode=appUrl.endsWith('.workers.dev') ? 'workers_dev_resolved' : 'fixed'
+    }
+  }
+
+  const adminEmails=await askOptional('Bootstrap platform admin email(s), comma separated; optional','PLATFORM_ADMIN_EMAILS')
+  const resend=await askOptional('Resend API key; optional','RESEND_API_KEY')
   const emailFrom=await ask('Invitation email sender; optional','EMAIL_FROM','GuestAtlas <noreply@example.com>')
-  const supabaseToken=await ask('Supabase access token; optional (otherwise deploy prompts login)','SUPABASE_ACCESS_TOKEN')
-  const cfAccount=await ask('Cloudflare account ID; optional when using interactive Wrangler login','CLOUDFLARE_ACCOUNT_ID')
-  const cfToken=await ask('Cloudflare API token; optional when using interactive Wrangler login','CLOUDFLARE_API_TOKEN')
-  const cfDomain=await ask('Cloudflare custom domain; blank keeps workers.dev enabled','CLOUDFLARE_CUSTOM_DOMAIN',suggestedDomain(appUrl))
+  const supabaseToken=await askOptional('Supabase access token; optional (otherwise deploy prompts login)','SUPABASE_ACCESS_TOKEN')
+  const cfAccount=await askOptional('Cloudflare account ID; optional when using interactive Wrangler login','CLOUDFLARE_ACCOUNT_ID')
+  const cfToken=await askOptional('Cloudflare API token; optional when using interactive Wrangler login','CLOUDFLARE_API_TOKEN')
+
+  let cfDomain=''
+  if (urlMode === 'fixed') {
+    try { cfDomain = new URL(appUrl).hostname } catch {}
+    cfDomain=await ask('Cloudflare custom domain','CLOUDFLARE_CUSTOM_DOMAIN',cfDomain)
+  } else {
+    cfDomain=''
+  }
 
   const pii=current.PII_ENCRYPTION_KEY && current.PII_ENCRYPTION_KEY!=='REPLACE_ME' ? current.PII_ENCRYPTION_KEY : randomBytes(32).toString('base64')
   const matching=current.MATCHING_SECRET && current.MATCHING_SECRET!=='REPLACE_ME' ? current.MATCHING_SECRET : randomBytes(64).toString('hex')
   const audit=current.AUDIT_HASH_SECRET && current.AUDIT_HASH_SECRET!=='REPLACE_ME' ? current.AUDIT_HASH_SECRET : randomBytes(64).toString('hex')
   const cron=current.CRON_SECRET && current.CRON_SECRET!=='REPLACE_ME' ? current.CRON_SECRET : randomBytes(48).toString('base64url')
+
   const values={
     NEXT_PUBLIC_SUPABASE_URL:supabaseUrl,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:publishable,
@@ -59,7 +100,8 @@ async function main(){
     PII_ENCRYPTION_KEY:pii,
     MATCHING_SECRET:matching,
     AUDIT_HASH_SECRET:audit,
-    NEXT_PUBLIC_APP_URL:appUrl.replace(/\/$/,''),
+    NEXT_PUBLIC_APP_URL:appUrl,
+    GUESTATLAS_URL_MODE:urlMode,
     RESEND_API_KEY:resend,
     EMAIL_FROM:emailFrom,
     PLATFORM_ADMIN_EMAILS:adminEmails,
@@ -71,12 +113,19 @@ async function main(){
     CLOUDFLARE_CUSTOM_DOMAIN:cfDomain,
     CRON_SECRET:cron,
   }
+
   for(const [k,v] of Object.entries(values)) if(/[\r\n]/.test(v)) throw new Error(`${k} cannot contain a newline`)
   const text = `# Generated by configure.cmd / scripts/configure.mjs\n${Object.entries(values).map(([k,v])=>`${k}=${v}`).join('\n')}\n`
   writeFileSync('.env.local',text,{mode:0o600})
+
   console.log('\n.env.local written. Cryptographic application secrets were generated automatically.')
-  if(values.NEXT_PUBLIC_APP_URL.startsWith('http://localhost')) console.log('WARNING: set NEXT_PUBLIC_APP_URL to the final HTTPS production origin before a real production launch.')
-  if(values.CLOUDFLARE_CUSTOM_DOMAIN) console.log(`Cloudflare deploy will attach custom domain: ${values.CLOUDFLARE_CUSTOM_DOMAIN}`)
+  if(urlMode === 'workers_dev_auto') {
+    console.log('Production URL mode: automatic workers.dev discovery on first GO-LIVE.cmd run.')
+    console.log('The deploy script will deploy once, capture the assigned URL, update .env.local, rebuild, and deploy the final configuration.')
+  } else if(values.CLOUDFLARE_CUSTOM_DOMAIN) {
+    console.log(`Cloudflare deploy will attach custom domain: ${values.CLOUDFLARE_CUSTOM_DOMAIN}`)
+  }
   console.log('Next: run GO-LIVE.cmd (or deploy.cmd).')
 }
+
 try{await main()}finally{rl.close()}
