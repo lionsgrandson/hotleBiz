@@ -1,8 +1,9 @@
-# GuestAtlas 1.0 release scope
+# GuestAtlas 1.1 Cloudflare release scope
 
-This repository contains the complete initial GuestAtlas network product surface, not a mockup or UI-only prototype.
+This repository contains the complete GuestAtlas network product surface plus its Cloudflare production runtime.
 
 ## Product
+
 - Multi-hotel workspaces, hotel verification, staff roles, invitations and revocation.
 - Mandatory staff MFA by default.
 - Exact-match guest identity network with audited, short-lived access grants.
@@ -13,12 +14,18 @@ This repository contains the complete initial GuestAtlas network product surface
 - Responsive authenticated dashboard plus legal/privacy/terms surfaces.
 
 ## Infrastructure
-- Next.js web/API tier.
-- Supabase Auth, PostgreSQL and private Storage migration.
+
+- Full Next.js web/API/server tier on Cloudflare Workers through OpenNext.
+- Private Cloudflare R2 for all new incident evidence.
+- Authenticated streaming evidence route with legacy Supabase Storage compatibility.
+- Cloudflare Smart Placement and Worker Observability.
+- Separate `guestatlas-maintenance` Cloudflare Worker with daily Cron Trigger.
+- Supabase Auth and PostgreSQL as the transactional identity/data layer behind the Worker.
 - Application-layer AES-256-GCM encryption and HMAC exact matching.
-- Vercel production deployment and cron configuration.
-- `configure.cmd`, `setup-local.cmd` and fail-fast `deploy.cmd` for Windows.
-- Dockerfile for alternate web-tier hosting.
+- `configure.cmd`, `setup-local.cmd`, `GO-LIVE.cmd` and compatibility `deploy.cmd` for Windows.
+- `GO-LIVE.cmd` installs, validates, builds, dry-runs, commits/pushes, migrates and deploys the complete release.
+- Cloudflare and application runtime secrets are separated from deployment credentials.
 
 ## Launch responsibility
-The code implements strong technical and product safeguards, but a real shared guest-information network still requires jurisdiction-specific counsel, operational security review, staging/integration testing, and production monitoring before accepting real guest data. See `LEGAL_AND_PRIVACY.md`, `SECURITY.md`, `DEPLOYMENT.md` and `VALIDATION.md`.
+
+The code implements strong technical and product safeguards, but a real shared guest-information network still requires jurisdiction-specific counsel, operational security review, staging/integration testing, backup/restore testing and production monitoring before accepting real guest data. See `LEGAL_AND_PRIVACY.md`, `SECURITY.md`, `DEPLOYMENT.md` and `VALIDATION.md`.
