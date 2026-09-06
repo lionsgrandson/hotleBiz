@@ -5,8 +5,9 @@ import { audit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
-export default async function Portal({ params }: { params: Promise<{ token: string }> }) {
+export default async function Portal({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ submitted?: string; error?: string }> }) {
   const { token } = await params
+  const status = await searchParams
   const admin = createAdminClient()
   const { data: portalToken, error: tokenError } = await admin
     .from('guest_portal_tokens')
@@ -45,6 +46,8 @@ export default async function Portal({ params }: { params: Promise<{ token: stri
       <span className="eyebrow">GuestAtlas personal data access</span>
       <h1>{decryptPII(guest.legal_name_cipher) || 'Guest record'}</h1>
       <p>This private page lets you review information held in the GuestAtlas network and challenge or request correction of a specific item. It does not expose other guests or internal hotel notes.</p>
+      {status.submitted === '1' && <p className="notice">Your challenge / correction request was submitted successfully and the record has been sent for review.</p>}
+      {status.error && <p className="error">{status.error}</p>}
 
       <h2>Stay feedback</h2>
       {!feedback.length ? <p>No visible feedback.</p> : feedback.map((x: any) => (
