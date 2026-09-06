@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+
 const supabase=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SECRET_KEY,{auth:{persistSession:false,autoRefreshToken:false}})
 const tables=[
   'profiles','platform_admins','hotels','hotel_memberships','hotel_invites',
@@ -11,7 +12,4 @@ for(const table of tables){
   if(error){console.error(`Schema verification failed for ${table}: ${error.message}`);process.exit(1)}
   console.log(`OK ${table}`)
 }
-const{data,error}=await supabase.storage.getBucket('incident-evidence')
-if(error||!data){console.error('Evidence bucket missing',error?.message||'');process.exit(1)}
-if(data.public){console.error('Evidence bucket must remain private');process.exit(1)}
-console.log('Database and private evidence storage verified.')
+console.log('Supabase database schema verified. Cloudflare R2 is verified separately by GO-LIVE.cmd.')
