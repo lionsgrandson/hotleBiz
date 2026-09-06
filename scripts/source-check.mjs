@@ -58,14 +58,20 @@ if (!middleware.includes('export async function middleware') && !middleware.incl
 
 const productionUrl = 'https://guestatlas.mosheschwartzberg.workers.dev'
 const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
-if (!goLive.includes('pin-production-url.mjs') || !goLive.includes('supabase config push')) throw new Error('GO-LIVE.cmd must pin the production URL and push hosted Supabase Auth config')
+if (!goLive.includes('pin-production-url.mjs')) throw new Error('GO-LIVE.cmd must pin the final production URL')
+if (/\bnpx\s+supabase\s+config\s+push\b/i.test(goLive)) throw new Error('GO-LIVE.cmd must not run supabase config push; it can sync paid/optional hosted services')
+if (!goLive.includes('supabase db push')) throw new Error('GO-LIVE.cmd must still apply Postgres migrations')
 const pinUrl = readFileSync(join(root, 'scripts/pin-production-url.mjs'), 'utf8')
 if (!pinUrl.includes(productionUrl) || !pinUrl.includes("workers_dev_resolved")) throw new Error('Production URL pin helper must enforce the final GuestAtlas workers.dev URL')
 
 const supabaseConfig = readFileSync(join(root, 'supabase/config.toml'), 'utf8')
-if (!supabaseConfig.includes(`site_url = "${productionUrl}"`)) throw new Error('Supabase Auth site_url must use the final GuestAtlas production URL')
-if (!supabaseConfig.includes(`additional_redirect_urls = ["${productionUrl}/auth/confirm"]`)) throw new Error('Supabase Auth redirect allowlist must include the GuestAtlas /auth/confirm route')
-if (/localhost:3000/.test(supabaseConfig)) throw new Error('Production Supabase config must not contain localhost:3000')
+if (!supabaseConfig.includes(`site_url = "${productionUrl}"`)) throw new Error('Supabase Auth site_url reference must use the final GuestAtlas production URL')
+if (!supabaseConfig.includes(`additional_redirect_urls = ["${productionUrl}/auth/confirm"]`)) throw new Error('Supabase Auth redirect reference must include the GuestAtlas /auth/confirm route')
+if (/localhost:3000/.test(supabaseConfig)) throw new Error('Supabase config must not contain localhost:3000')
+if (/^\[storage\]/m.test(supabaseConfig)) throw new Error('Hosted Storage config must not be managed by config.toml in the free-tier release flow')
+if (!/schemas\s*=\s*\["public",\s*"graphql_public"\]/.test(supabaseConfig)) throw new Error('Data API schemas should stay on the existing free-tier-safe public/graphql_public set')
+if (!/\[auth\.mfa\.totp\][\s\S]*enroll_enabled\s*=\s*true[\s\S]*verify_enabled\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep TOTP MFA enabled')
+if (!/\[auth\.email\][\s\S]*enable_confirmations\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep email confirmations enabled')
 
 const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8')
 if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
