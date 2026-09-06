@@ -20,21 +20,29 @@ export async function POST(request: Request) {
     if (typeof b.document === 'string' && b.document.trim()) terms.push({ type: 'document', hash: hmacMatch('document', normalizeDocument(b.document)) })
     if (typeof b.email === 'string' && b.email.trim()) terms.push({ type: 'email', hash: hmacMatch('email', normalizeEmail(b.email)) })
     if (typeof b.phone === 'string' && b.phone.trim()) terms.push({ type: 'phone', hash: hmacMatch('phone', normalizePhone(b.phone)) })
-    if (typeof b.fullName === 'string' && b.fullName.trim() && typeof b.dateOfBirth === 'string' && b.dateOfBirth) { const dob = isoDate(b.dateOfBirth, 'Date of birth'); terms.push({ type: 'name_dob', hash: hmacMatch('name_dob', `${normalizeText(b.fullName)}|${dob}`) }) }
+    if (typeof b.fullName === 'string' && b.fullName.trim() && typeof b.dateOfBirth === 'string' && b.dateOfBirth) {
+      const dob = isoDate(b.dateOfBirth, 'Date of birth')
+      terms.push({ type: 'name_dob', hash: hmacMatch('name_dob', `${normalizeText(b.fullName)}|${dob}`) })
+    }
     if (!terms.length) throw new ApiError(400, 'Use a passport/ID, email, phone, or full name plus date of birth. Name-only searching is intentionally disabled.')
 
     // Write the access-attempt audit entry before touching network identity indexes.
     await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'guest_network_search_requested', targetType: 'guest_search', purpose, metadata: { matchTypes: terms.map(t => t.type) } })
 
     // Every supplied identifier must point at the same guest. This avoids accidental OR matches.
-    let candidateIds: Set<string> | null = null
+    let candidateIds: string[] | null = null
     for (const t of terms) {
       const { data, error } = await admin.from('guest_identifiers').select('guest_id').eq('identifier_hmac', t.hash)
       if (error) throw error
-      const thisSet = new Set((data || []).map((r: any) => r.guest_id as string))
-      candidateIds = candidateIds === null ? thisSet : new Set([...candidateIds].filter(id => thisSet.has(id)))
+      const ids = (data || []).map((r: any) => String(r.guest_id))
+      if (candidateIds === null) candidateIds = [...new Set<string>(ids)]
+      else {
+        const current = new Set<string>(ids)
+        candidateIds = candidateIds.filter(id => current.has(id))
+      }
+      if (candidateIds.length === 0) break
     }
-    const guestIds = [...(candidateIds || new Set<string>())].slice(0, 20)
+    const guestIds = (candidateIds || []).slice(0, 20)
     const { data: guests, error: guestError } = guestIds.length ? await admin.from('guests').select('*').in('id', guestIds) : { data: [] as any[], error: null }
     if (guestError) throw guestError
 
@@ -42,10 +50,11 @@ export async function POST(request: Request) {
     const results = []
     for (const row of guests || []) {
       const g = guestDisplay(row)
-      const [{ data: identifiers }, reputation] = await Promise.all([
+      const [{ data: identifiers, error: identifierError }, reputation] = await Promise.all([
         admin.from('guest_identifiers').select('identifier_type,masked_value').eq('guest_id', row.id),
         getGuestReputation(admin, row.id),
       ])
+      if (identifierError) throw identifierError
       // Minimum necessary disclosure in search response. Full decrypted PII is only returned on an authorized record page.
       results.push({ id: g.id, legalName: g.legalName, countryCode: g.countryCode, identifiers: (identifiers || []).map((x: any) => `${x.identifier_type} ${x.masked_value}`), reputation })
     }
