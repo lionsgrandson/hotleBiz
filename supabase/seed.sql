@@ -1,0 +1,2 @@
+-- Intentionally empty. Production-like guest data should never be committed as seed data.
+-- Use scripts/seed-demo.mjs only against a disposable development project.

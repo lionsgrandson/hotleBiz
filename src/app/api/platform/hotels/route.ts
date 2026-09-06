@@ -1,0 +1,6 @@
+import { NextResponse } from 'next/server'
+import { getVerifiedUser, isPlatformAdmin, hasRequiredMfa } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { assertSameOrigin, body, fail, ApiError, requiredString } from '@/lib/http'
+import { audit } from '@/lib/audit'
+export async function POST(request:Request){try{assertSameOrigin(request);if(!await hasRequiredMfa())throw new ApiError(403,'Multi-factor authentication required');const user=await getVerifiedUser();if(!user||!await isPlatformAdmin(user.id))throw new ApiError(403,'Platform administrator required');const b=await body(request);const hotelId=requiredString(b.hotelId,'Hotel',60);const decision=String(b.decision);if(!['verified','rejected','suspended'].includes(decision))throw new ApiError(400,'Invalid decision');const admin=createAdminClient();const{error}=await admin.from('hotels').update({verification_status:decision,verified_at:decision==='verified'?new Date().toISOString():null,verified_by:user.id}).eq('id',hotelId);if(error)throw error;await audit(admin,{userId:user.id,action:`hotel_${decision}`,targetType:'hotel',targetId:hotelId,purpose:'network property verification'});return NextResponse.redirect(new URL('/platform',request.url),303)}catch(e){return fail(e,request)}}

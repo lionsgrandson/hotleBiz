@@ -1,0 +1,1 @@
+console.log('Demo seeding is intentionally conservative. Create a normal account and hotel through the UI, then add synthetic guests through the application so encryption and audit paths are exercised.')

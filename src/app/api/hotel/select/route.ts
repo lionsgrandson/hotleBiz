@@ -1,0 +1,3 @@
+import { NextResponse } from 'next/server'
+import { apiContext, body, fail, ApiError, requiredString } from '@/lib/http'
+export async function POST(request:Request){try{const ctx=await apiContext(request);const b=await body(request);const hotelId=requiredString(b.hotelId,'Hotel',60);if(!ctx.memberships.some((m:any)=>m.hotel_id===hotelId))throw new ApiError(403,'You are not a member of that property');const res=NextResponse.redirect(new URL('/dashboard',request.url),303);res.cookies.set('guestatlas_hotel',hotelId,{httpOnly:true,sameSite:'lax',secure:new URL(request.url).protocol==='https:',path:'/',maxAge:60*60*24*365});return res}catch(e){return fail(e,request)}}
