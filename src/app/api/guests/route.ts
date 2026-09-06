@@ -30,27 +30,26 @@ export async function POST(request: Request) {
     let existingId: string | null = null
     const documentIdentifier = identifiers.find(i => i.type === 'passport' || i.type === 'national_id')
 
-    // A government/travel document is strong enough to merge by itself.
     if (documentIdentifier) {
       const { data, error } = await admin.from('guest_identifiers').select('guest_id').eq('identifier_hmac', documentIdentifier.hash).limit(1).maybeSingle()
       if (error) throw error
-      if (data) existingId = data.guest_id
+      if (data?.guest_id) existingId = String(data.guest_id)
     }
 
     // Email/phone alone never auto-merges people. It must agree with exact name + DOB.
     if (!existingId) {
       const { data: nameRows, error: nameError } = await admin.from('guest_identifiers').select('guest_id').eq('identifier_hmac', nameDobHash)
       if (nameError) throw nameError
-      const nameIds = new Set((nameRows || []).map((r: any) => r.guest_id))
+      const nameIds = new Set<string>((nameRows || []).map((r: any) => String(r.guest_id)))
       for (const x of identifiers.filter(i => ['email', 'phone'].includes(i.type))) {
         const { data: contactRows, error: contactError } = await admin.from('guest_identifiers').select('guest_id').eq('identifier_hmac', x.hash)
         if (contactError) throw contactError
-        const agreed = (contactRows || []).find((r: any) => nameIds.has(r.guest_id))
-        if (agreed) { existingId = agreed.guest_id; break }
+        const agreed = (contactRows || []).find((r: any) => nameIds.has(String(r.guest_id)))
+        if (agreed?.guest_id) { existingId = String(agreed.guest_id); break }
       }
     }
 
-    let guestId = existingId
+    let guestId: string | null = existingId
     let createdNew = false
     if (!guestId) {
       const { data: g, error } = await admin.from('guests').insert({
@@ -58,41 +57,43 @@ export async function POST(request: Request) {
         country_code: countryCode, created_by_hotel_id: hotel.id, created_by: user.id,
       }).select('id').single()
       if (error) throw error
-      guestId = g.id
+      guestId = String(g.id)
       createdNew = true
 
-      const { error: idError } = await admin.from('guest_identifiers').insert(identifiers.map(x => ({ guest_id: guestId, identifier_type: x.type, identifier_hmac: x.hash, masked_value: x.masked, created_by: user.id })))
+      const { error: idError } = await admin.from('guest_identifiers').insert(identifiers.map(x => ({ guest_id: guestId!, identifier_type: x.type, identifier_hmac: x.hash, masked_value: x.masked, created_by: user.id })))
       if (idError) {
         // A concurrent request may have inserted the same unique document after our lookup.
-        // Remove the orphan guest and resolve the winner deterministically.
         await admin.from('guests').delete().eq('id', guestId)
         if (idError.code === '23505' && documentIdentifier) {
           const { data: winner, error: winnerError } = await admin.from('guest_identifiers').select('guest_id').eq('identifier_hmac', documentIdentifier.hash).limit(1).maybeSingle()
           if (winnerError) throw winnerError
-          if (winner?.guest_id) { guestId = winner.guest_id; existingId = winner.guest_id; createdNew = false }
+          if (winner?.guest_id) { guestId = String(winner.guest_id); existingId = guestId; createdNew = false }
           else throw idError
         } else throw idError
       }
     }
 
+    if (!guestId) throw new ApiError(500, 'Guest identity resolution did not produce a record')
+    const resolvedGuestId = guestId
+
     // Once identity has been strongly resolved, enrich the shared match index with any newly supplied exact identifiers.
-    if (!createdNew && guestId) {
+    if (!createdNew) {
       const hashes = identifiers.map(i => i.hash)
-      const { data: knownRows, error: knownError } = await admin.from('guest_identifiers').select('identifier_hmac').eq('guest_id', guestId).in('identifier_hmac', hashes)
+      const { data: knownRows, error: knownError } = await admin.from('guest_identifiers').select('identifier_hmac').eq('guest_id', resolvedGuestId).in('identifier_hmac', hashes)
       if (knownError) throw knownError
-      const known = new Set((knownRows || []).map((r: any) => r.identifier_hmac))
+      const known = new Set<string>((knownRows || []).map((r: any) => String(r.identifier_hmac)))
       const missing = identifiers.filter(i => !known.has(i.hash))
       if (missing.length) {
-        const { error: enrichError } = await admin.from('guest_identifiers').insert(missing.map(x => ({ guest_id: guestId, identifier_type: x.type, identifier_hmac: x.hash, masked_value: x.masked, created_by: user.id })))
-        if (enrichError?.code === '23505') throw new ApiError(409, 'One supplied identity document already belongs to a different guest record. Resolve the identity conflict before continuing.')
+        const { error: enrichError } = await admin.from('guest_identifiers').insert(missing.map(x => ({ guest_id: resolvedGuestId, identifier_type: x.type, identifier_hmac: x.hash, masked_value: x.masked, created_by: user.id })))
+        if (enrichError?.code === '23505') throw new ApiError(409, 'One supplied identity identifier already belongs to a different guest record. Resolve the identity conflict before continuing.')
         if (enrichError) throw enrichError
       }
     }
 
-    const { error: linkError } = await admin.from('guest_hotel_links').upsert({ guest_id: guestId, hotel_id: hotel.id, relationship_status: 'active' }, { onConflict: 'guest_id,hotel_id' })
+    const { error: linkError } = await admin.from('guest_hotel_links').upsert({ guest_id: resolvedGuestId, hotel_id: hotel.id, relationship_status: 'active' }, { onConflict: 'guest_id,hotel_id' })
     if (linkError) throw linkError
-    await grantGuestAccess(admin, hotel.id, user.id, [guestId], purpose)
-    await audit(admin, { hotelId: hotel.id, userId: user.id, action: existingId ? 'guest_linked_existing' : 'guest_created', targetType: 'guest', targetId: guestId, purpose })
-    return NextResponse.redirect(new URL(`/guests/${guestId}?purpose=${encodeURIComponent(purpose)}`, request.url), 303)
+    await grantGuestAccess(admin, hotel.id, user.id, [resolvedGuestId], purpose)
+    await audit(admin, { hotelId: hotel.id, userId: user.id, action: existingId ? 'guest_linked_existing' : 'guest_created', targetType: 'guest', targetId: resolvedGuestId, purpose })
+    return NextResponse.redirect(new URL(`/guests/${resolvedGuestId}?purpose=${encodeURIComponent(purpose)}`, request.url), 303)
   } catch (e) { return fail(e, request) }
 }
