@@ -44,10 +44,13 @@ const requiredFiles = [
   'wrangler.maintenance.jsonc',
   'open-next.config.ts',
   'GO-LIVE.cmd',
-  'proxy.ts',
+  'middleware.ts',
 ]
 for (const file of requiredFiles) if (!files.includes(join(root, file))) throw new Error(`Required product file missing: ${file}`)
-for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs']) if (files.includes(join(root, retired))) throw new Error(`Retired Vercel deployment file still present: ${retired}`)
+for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
+
+const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
+if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
