@@ -20,8 +20,7 @@ jobs:
       PII_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       MATCHING_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       AUDIT_HASH_SECRET: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
-      NEXT_PUBLIC_APP_URL: https://guestatlas.example.com
-      CLOUDFLARE_CUSTOM_DOMAIN: guestatlas.example.com
+      NEXT_PUBLIC_APP_URL: https://guestatlas.mosheschwartzberg.workers.dev
       REQUIRE_MFA: 'true'
       CRON_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       EMAIL_FROM: GuestAtlas CI <noreply@example.com>
@@ -52,7 +51,8 @@ jobs:
           MATCHING_SECRET=$MATCHING_SECRET
           AUDIT_HASH_SECRET=$AUDIT_HASH_SECRET
           NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
-          CLOUDFLARE_CUSTOM_DOMAIN=$CLOUDFLARE_CUSTOM_DOMAIN
+          GUESTATLAS_URL_MODE=workers_dev_resolved
+          CLOUDFLARE_CUSTOM_DOMAIN=
           REQUIRE_MFA=$REQUIRE_MFA
           CRON_SECRET=$CRON_SECRET
           EMAIL_FROM=$EMAIL_FROM
@@ -61,7 +61,20 @@ jobs:
           node scripts/check-env.mjs --production
           node scripts/build-cloudflare-secrets.mjs .env.local
 
-      - name: Automatic workers.dev URL bootstrap test
+      - name: Production URL pin test
+        shell: bash
+        run: |
+          cat > /tmp/guestatlas-pin.env <<EOF
+          NEXT_PUBLIC_APP_URL=http://localhost:3000
+          GUESTATLAS_URL_MODE=workers_dev_auto
+          CLOUDFLARE_CUSTOM_DOMAIN=example.com
+          EOF
+          node scripts/pin-production-url.mjs /tmp/guestatlas-pin.env
+          grep -q '^NEXT_PUBLIC_APP_URL=https://guestatlas.mosheschwartzberg.workers.dev$' /tmp/guestatlas-pin.env
+          grep -q '^GUESTATLAS_URL_MODE=workers_dev_resolved$' /tmp/guestatlas-pin.env
+          grep -q '^CLOUDFLARE_CUSTOM_DOMAIN=$' /tmp/guestatlas-pin.env
+
+      - name: Legacy workers.dev discovery regression test
         shell: bash
         run: |
           cat > /tmp/guestatlas-auto.env <<EOF
