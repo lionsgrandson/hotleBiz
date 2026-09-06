@@ -1,0 +1,74 @@
+name: GuestAtlas Cloudflare CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-publishable-placeholder
+      SUPABASE_SECRET_KEY: ci-server-secret-placeholder
+      PII_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      MATCHING_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      AUDIT_HASH_SECRET: abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789
+      NEXT_PUBLIC_APP_URL: https://guestatlas.example.com
+      REQUIRE_MFA: 'true'
+      CRON_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      EMAIL_FROM: GuestAtlas CI <noreply@example.com>
+      PLATFORM_ADMIN_EMAILS: admin@example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Create CI environment file
+        shell: bash
+        run: |
+          cat > .env.local <<EOF
+          NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+          SUPABASE_SECRET_KEY=$SUPABASE_SECRET_KEY
+          PII_ENCRYPTION_KEY=$PII_ENCRYPTION_KEY
+          MATCHING_SECRET=$MATCHING_SECRET
+          AUDIT_HASH_SECRET=$AUDIT_HASH_SECRET
+          NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
+          REQUIRE_MFA=$REQUIRE_MFA
+          CRON_SECRET=$CRON_SECRET
+          EMAIL_FROM=$EMAIL_FROM
+          PLATFORM_ADMIN_EMAILS=$PLATFORM_ADMIN_EMAILS
+          EOF
+          node scripts/build-cloudflare-secrets.mjs .env.local
+
+      - name: Source integrity
+        run: npm run source-check
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Self tests
+        run: npm run self-test
+
+      - name: OpenNext Cloudflare build
+        run: npm run cf:build
+
+      - name: Application Worker dry run
+        run: npx wrangler deploy --dry-run --secrets-file .cloudflare.secrets.tmp.json --outdir .cloudflare-dry-run
+
+      - name: Maintenance Worker dry run
+        run: npx wrangler deploy --config wrangler.maintenance.jsonc --dry-run --secrets-file .maintenance.secrets.tmp.json
