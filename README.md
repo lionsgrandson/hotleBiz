@@ -1,6 +1,18 @@
 # GuestAtlas
 
-GuestAtlas is a complete multi-property hotel guest feedback and incident network. It is designed as **verified hospitality intelligence**, not a public people directory or automatic blacklist.
+GuestAtlas is a multi-property hotel guest feedback and incident network. It is designed as **verified hospitality intelligence**, not a public people directory or automatic blacklist.
+
+## Production architecture
+
+- **Cloudflare Workers** runs the full Next.js application, Server Components, Server Actions and API routes through OpenNext.
+- **Cloudflare R2** stores new incident evidence in a private bucket named `guestatlas-evidence`.
+- **Cloudflare Smart Placement** is enabled to reduce repeated upstream latency to database/auth services.
+- **Cloudflare Observability** is enabled on both the application Worker and maintenance Worker.
+- **Cloudflare Cron Triggers** run the separate `guestatlas-maintenance` Worker every day at 02:15 UTC to refresh retention candidates.
+- **Supabase Postgres + Auth** remain the transactional database and identity provider behind the Cloudflare application backend.
+- Evidence uploaded before the R2 migration remains readable through a legacy Supabase Storage fallback; all new evidence goes to R2.
+
+The browser uses Supabase only for authentication. Guest/business tables are accessed by server code. The server-only Supabase secret key, encryption keys and matching secrets are never exposed to browser code.
 
 ## Included product surface
 
@@ -15,23 +27,22 @@ GuestAtlas is a complete multi-property hotel guest feedback and incident networ
 - Six-dimension weighted hospitality scoring on a 0–100 display scale.
 - Serious incident workflow kept separate from the hospitality score.
 - Severity 3–4 two-person moderation where the author cannot self-approve.
-- Private incident evidence with MIME/size limits, hashes and audited signed downloads.
+- Private R2 incident evidence with MIME/size limits, hashes and authenticated streaming downloads.
 - Guest disclosure portal, correction/dispute workflow, automatic withholding of challenged records during review, and immutable revision history.
 - Team invites, role changes, revocation and property switching.
 - Append-only audit trail and daily search limits.
-- Retention review queue plus a deliberately manual audit-log pruning function.
+- Retention review queue and Cloudflare-scheduled maintenance.
 - Platform administration for hotel verification.
 - Responsive desktop/mobile UI.
-- Windows local setup and production deployment scripts.
-- Docker web-tier deployment option.
+- Windows local setup and one-command production release.
 
 ## Security and privacy architecture
-
-The browser uses Supabase only for authentication. Guest/business tables are accessed only by the Next.js server with the server-only Supabase secret key. Direct `anon` and `authenticated` database privileges are revoked from application tables and RLS is enabled as a second boundary.
 
 Guest identity and guest-linked free text are encrypted with AES-256-GCM. Searchable exact-match identifiers are deterministic HMAC-SHA256 values using a separate secret. Encrypted fields include primary identity, reservation/room references, feedback summaries, incident titles/descriptions/references, evidence filenames, dispute text and responses.
 
 Cross-property users do not receive another hotel's reservation timeline, contact details, or raw evidence. Search grants expire automatically. Every lookup requires a stated business purpose and is audited.
+
+New evidence objects are not public and are not exposed through signed R2 URLs. The authenticated `/api/evidence/:id` route performs MFA/role/source-property checks and streams the object through the Worker.
 
 ## Rating model
 
@@ -48,22 +59,52 @@ The weighted 1–5 result is displayed as 0–100. Confidence is low for 1–2 p
 
 Incidents do **not** secretly reduce the numerical score. They remain separate records with category, severity, evidence level, review state and dispute state.
 
-## Fast deployment
+## One-click Windows production release
 
-1. Create a Supabase project and copy its project URL, publishable key, server secret key and project ref.
-2. Run `configure.cmd`. The wizard writes `.env.local` and automatically generates the AES encryption key plus matching, audit and cron secrets.
-3. Set `NEXT_PUBLIC_APP_URL` to the intended production HTTPS origin in the wizard. Optional Supabase/Vercel access tokens make deployment non-interactive.
-4. Run `deploy.cmd`. It installs the pinned dependencies, runs the source integrity check, validates secrets, typechecks, executes self-tests, runs a production build, pushes Supabase migrations, verifies the database/private bucket, links Vercel, synchronizes production environment variables and deploys production.
-5. In Supabase Auth, set the Site URL to `NEXT_PUBLIC_APP_URL` and allow `NEXT_PUBLIC_APP_URL/auth/confirm`. For the **Confirm signup** email template, use `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` so the SSR confirmation route can verify the token directly.
-6. Sign up, enroll TOTP MFA and create the first property.
-7. Run `node scripts/promote-admin.mjs your@email.com` for an email allowed by `PLATFORM_ADMIN_EMAILS`.
-8. Open `/platform` and verify the first property. Cross-hotel guest processing remains blocked until verification.
+1. Install Node.js 22+, npm and Git.
+2. Create a Supabase project and copy its project URL, publishable key, server secret key and project ref.
+3. Have a Cloudflare account. An API token/account ID are optional; without them Wrangler opens interactive login.
+4. Run `configure.cmd` and enter the values. The wizard generates the encryption, matching, audit and cron secrets.
+5. Run **`GO-LIVE.cmd`**.
 
-`deploy.cmd` is fail-fast and will not continue past a failed typecheck, migration, schema verification, build, environment sync or deployment step.
+`GO-LIVE.cmd` does all of the following in order:
+
+1. Installs exact dependencies (`npm ci` when a lockfile exists, otherwise `npm install`).
+2. Validates environment/source integrity.
+3. Runs TypeScript and the cryptography/scoring self-tests.
+4. Authenticates Wrangler.
+5. Creates/verifies the private `guestatlas-evidence` R2 bucket.
+6. Builds the complete OpenNext Cloudflare Worker.
+7. Runs a Wrangler dry-run bundle validation.
+8. Commits and pushes the exact validated source to GitHub `main`.
+9. Links Supabase and applies migrations.
+10. Verifies the Postgres schema.
+11. Creates sanitized Worker secret bundles that exclude deployment credentials.
+12. Deploys the GuestAtlas application Worker and optional custom domain.
+13. Deploys the scheduled `guestatlas-maintenance` Worker.
+14. Deletes temporary secret bundles.
+
+`deploy.cmd` is kept as a compatibility alias and calls `GO-LIVE.cmd`.
+
+## Supabase Auth after first deployment
+
+Set the Supabase Auth Site URL to `NEXT_PUBLIC_APP_URL` and allow `NEXT_PUBLIC_APP_URL/auth/confirm`.
+
+For the **Confirm signup** email template use:
+
+```text
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
+```
+
+Then sign up, enroll TOTP MFA, create the first property, run `node scripts/promote-admin.mjs your@email.com` for an allowed `PLATFORM_ADMIN_EMAILS` address, and verify the first property from `/platform`.
 
 ## Local development
 
-Run `setup-local.cmd`, fill `.env.local`, then run `npm run dev`.
+Run `setup-local.cmd`, then:
+
+- `npm run dev` for the fast Next.js development loop.
+- `npm run cf:preview` to test the production build in the Cloudflare Workers runtime.
+- `GO-LIVE.cmd` for the full validated production release.
 
 ## Production launch gate
 
