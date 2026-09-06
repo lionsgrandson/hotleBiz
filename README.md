@@ -69,13 +69,21 @@ The weighted 1–5 result is displayed as 0–100. Confidence is low for 1–2 p
 
 Incidents do **not** secretly reduce the numerical score. They remain separate records with category, severity, evidence level, review state and dispute state.
 
+## Free-tier deployment policy
+
+GuestAtlas production releases must not automatically opt into paid Supabase services or create paid Supabase resources.
+
+`GO-LIVE.cmd` deliberately does **not** run `supabase config push`. Current Supabase CLI config push synchronizes multiple hosted service configurations at once, including API, Auth and Storage. That broad sync can trigger optional or paid Storage/Vector feature checks even when GuestAtlas does not use those features.
+
+The production release therefore limits Supabase automation to the existing project plus Postgres migrations. No project, branch, paid add-on, vector bucket, custom Supabase domain or other billable Supabase resource is created by the release script.
+
 ## One-click Windows production release
 
 1. Have a Cloudflare account and the linked Supabase project.
 2. Keep the local `.env.local` beside `GO-LIVE.cmd`, or run `configure.cmd` once. The server secret stays local and `.env.local` is gitignored.
 3. Run **`GO-LIVE.cmd`**.
 
-GuestAtlas is now permanently pinned to `https://guestatlas.mosheschwartzberg.workers.dev`. `GO-LIVE.cmd` rewrites the local canonical URL to this origin before validation so invite links, guest portal links, Auth callbacks and the maintenance Worker cannot fall back to localhost.
+GuestAtlas is permanently pinned to `https://guestatlas.mosheschwartzberg.workers.dev`. `GO-LIVE.cmd` rewrites the local canonical URL to this origin before validation so invite links, guest portal links, Auth callbacks and the maintenance Worker cannot fall back to localhost.
 
 `GO-LIVE.cmd` does all of the following:
 
@@ -85,8 +93,8 @@ GuestAtlas is now permanently pinned to `https://guestatlas.mosheschwartzberg.wo
 4. Validates environment/source integrity, TypeScript and application self-tests.
 5. Authenticates Wrangler, verifies R2, builds OpenNext and dry-runs both Workers.
 6. Commits and pushes the exact validated source to GitHub `main`.
-7. Links Supabase and runs `supabase config push`, which synchronizes the hosted Auth Site URL and redirect allowlist from `supabase/config.toml`.
-8. Applies database migrations and verifies the expected Postgres schema.
+7. Links the existing Supabase project and applies database migrations only.
+8. Verifies the expected Postgres schema.
 9. Deploys the GuestAtlas application Worker and scheduled maintenance Worker.
 10. Deletes temporary deployment logs and secret bundles.
 
@@ -94,14 +102,17 @@ GuestAtlas is now permanently pinned to `https://guestatlas.mosheschwartzberg.wo
 
 ## Supabase Auth production configuration
 
-`supabase/config.toml` is the source of truth for hosted Auth URL settings:
+Hosted Auth settings are intentionally not mass-synchronized by the release script. Verify these free settings in the Supabase Dashboard:
 
 ```text
 Site URL = https://guestatlas.mosheschwartzberg.workers.dev
 Redirect = https://guestatlas.mosheschwartzberg.workers.dev/auth/confirm
+TOTP MFA enrollment = enabled
+TOTP MFA verification = enabled
+Confirm email = enabled
 ```
 
-`GO-LIVE.cmd` pushes this configuration to the linked Supabase project on each production release.
+`supabase/config.toml` keeps the intended Auth values as a checked-in reference, but `GO-LIVE.cmd` does not push the whole config to the hosted project.
 
 For the **Confirm signup** email template use:
 
