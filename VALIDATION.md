@@ -1,23 +1,41 @@
 # Validation status
 
-This source tree received static and focused logic validation in the generation environment.
+GuestAtlas is now validated as a Cloudflare Workers application rather than a Vercel deployment.
 
-## Completed
+## Automated release checks
 
-- All TypeScript/TSX source files were transpile-parsed for syntax errors after final security patches.
-- `npm run self-test` checks weighted scoring, 0–100 reputation output, confidence thresholds and rebook-rate calculation.
-- The same self-test checks AES-256-GCM encrypt/decrypt round-trip, deterministic normalized HMAC matching, identifier-domain separation and token helpers.
-- Source scans checked for stale plaintext database-column references after encryption expansion.
-- Deployment script is fail-fast: environment check, typecheck, production build, migration, schema verification, Vercel environment sync, then production deploy.
-- Configuration and Vercel-environment helper scripts were syntax-checked with Node. The configuration wizard was exercised in an isolated pseudo-terminal, and Vercel environment synchronization was exercised against a mock CLI boundary without exposing values.
-- Database verification now checks every application table plus that the evidence bucket is private.
+`GO-LIVE.cmd` is fail-fast and executes these checks before production deployment:
 
-## Environment limitation
+1. Exact dependency installation.
+2. Environment validation.
+3. Source/deployment integrity scan.
+4. TypeScript validation.
+5. Weighted-score and cryptography/matching self-tests.
+6. OpenNext Cloudflare production build.
+7. Wrangler production bundle dry-run.
+8. Git push of the exact validated source.
+9. Supabase migration and schema verification.
+10. Main Worker deployment and scheduled-maintenance Worker deployment.
 
-The execution environment used to assemble this repository could not reach the public npm registry (DNS/network failure), so a fresh `npm install` and real `next build` could not be completed here. The project therefore does not claim a successful dependency-resolved production build inside this environment.
+`npm run self-test` checks weighted scoring, 0–100 reputation output, confidence thresholds, rebook-rate calculation, AES-256-GCM encrypt/decrypt round-trip, deterministic normalized HMAC matching, identifier-domain separation and token helpers.
 
-`deploy.cmd` performs the real dependency installation, TypeScript check and Next.js production build before it applies/deploys the web tier. Do not bypass failures.
+The source checker requires the OpenNext config, Cloudflare Worker config, private R2 evidence binding, maintenance Worker, observability, `nodejs_compat`, exact dependency pins and `GO-LIVE.cmd`. It rejects the retired Vercel deployment path and scans for obvious committed secrets and stale product branding.
+
+## Cloudflare-specific checks
+
+- `npm run cf:build` compiles Next.js through `@opennextjs/cloudflare`.
+- `wrangler deploy --dry-run --outdir .cloudflare-dry-run` validates the generated Worker bundle without publishing it.
+- `GO-LIVE.cmd` verifies or creates the `guestatlas-evidence` R2 bucket before deployment.
+- New evidence is written to R2 and downloaded only through the authenticated application route.
+- Legacy Supabase Storage evidence remains readable during migration.
+- The maintenance Worker is independently deployable and observable.
+
+## Current validation run
+
+A GitHub Actions workflow performs a fresh networked dependency installation, source check, typecheck, self-test, OpenNext Cloudflare build and Wrangler dry-run on every push to `main` and on pull requests. Its result is the dependency-resolved build gate for this repository.
+
+Do not treat a local source push as sufficient if this workflow is red. Fix the failing step and rerun it.
 
 ## Launch validation still required
 
-Run the deployment in a networked development/staging environment, complete the post-deploy checks in `DEPLOYMENT.md`, then run integration tests, browser/device QA, Supabase security advisors and an external security/privacy review before accepting real guest data.
+Before accepting real guest data, complete the post-deploy checks in `DEPLOYMENT.md`, browser/device QA, authentication/MFA flows, real R2 upload/download tests, Supabase security advisors, Cloudflare WAF/rate-limit configuration, backup/restore testing, and an external security/privacy review.
