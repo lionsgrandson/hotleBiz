@@ -61,6 +61,19 @@ jobs:
           node scripts/check-env.mjs --production
           node scripts/build-cloudflare-secrets.mjs .env.local
 
+      - name: Automatic workers.dev URL bootstrap test
+        shell: bash
+        run: |
+          cat > /tmp/guestatlas-auto.env <<EOF
+          NEXT_PUBLIC_APP_URL=https://guestatlas-bootstrap.invalid
+          GUESTATLAS_URL_MODE=workers_dev_auto
+          CLOUDFLARE_CUSTOM_DOMAIN=
+          EOF
+          printf 'Published guestatlas\n  https://guestatlas.ci-subdomain.workers.dev\n' > /tmp/guestatlas-deploy.log
+          node scripts/finalize-workers-url.mjs /tmp/guestatlas-deploy.log /tmp/guestatlas-auto.env
+          grep -q '^NEXT_PUBLIC_APP_URL=https://guestatlas.ci-subdomain.workers.dev$' /tmp/guestatlas-auto.env
+          grep -q '^GUESTATLAS_URL_MODE=workers_dev_resolved$' /tmp/guestatlas-auto.env
+
       - name: Source integrity
         run: npm run source-check
 
