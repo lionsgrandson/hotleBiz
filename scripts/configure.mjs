@@ -16,9 +16,17 @@ if (existsSync('.env.local')) {
 }
 async function ask(label, key, fallback='') {
   const old=current[key] || fallback
-  const suffix=old ? ` [${key.includes('KEY')||key.includes('SECRET')||key.includes('TOKEN') ? 'keep existing' : old}]` : ''
+  const hidden = key.includes('KEY') || key.includes('SECRET') || key.includes('TOKEN')
+  const suffix=old ? ` [${hidden ? 'keep existing' : old}]` : ''
   const answer=clean(await rl.question(`${label}${suffix}: `))
   return answer || old
+}
+function suggestedDomain(appUrl) {
+  try {
+    const u = new URL(appUrl)
+    if (u.protocol === 'https:' && u.hostname && !u.hostname.endsWith('.workers.dev')) return u.hostname
+  } catch {}
+  return ''
 }
 async function main(){
   console.log('\nGuestAtlas configuration wizard')
@@ -36,7 +44,9 @@ async function main(){
   const resend=await ask('Resend API key; optional','RESEND_API_KEY')
   const emailFrom=await ask('Invitation email sender; optional','EMAIL_FROM','GuestAtlas <noreply@example.com>')
   const supabaseToken=await ask('Supabase access token; optional (otherwise deploy prompts login)','SUPABASE_ACCESS_TOKEN')
-  const vercelToken=await ask('Vercel token; optional (otherwise deploy prompts login)','VERCEL_TOKEN')
+  const cfAccount=await ask('Cloudflare account ID; optional when using interactive Wrangler login','CLOUDFLARE_ACCOUNT_ID')
+  const cfToken=await ask('Cloudflare API token; optional when using interactive Wrangler login','CLOUDFLARE_API_TOKEN')
+  const cfDomain=await ask('Cloudflare custom domain; blank keeps workers.dev enabled','CLOUDFLARE_CUSTOM_DOMAIN',suggestedDomain(appUrl))
 
   const pii=current.PII_ENCRYPTION_KEY && current.PII_ENCRYPTION_KEY!=='REPLACE_ME' ? current.PII_ENCRYPTION_KEY : randomBytes(32).toString('base64')
   const matching=current.MATCHING_SECRET && current.MATCHING_SECRET!=='REPLACE_ME' ? current.MATCHING_SECRET : randomBytes(64).toString('hex')
@@ -56,7 +66,9 @@ async function main(){
     REQUIRE_MFA:'true',
     SUPABASE_PROJECT_REF:projectRef,
     SUPABASE_ACCESS_TOKEN:supabaseToken,
-    VERCEL_TOKEN:vercelToken,
+    CLOUDFLARE_ACCOUNT_ID:cfAccount,
+    CLOUDFLARE_API_TOKEN:cfToken,
+    CLOUDFLARE_CUSTOM_DOMAIN:cfDomain,
     CRON_SECRET:cron,
   }
   for(const [k,v] of Object.entries(values)) if(/[\r\n]/.test(v)) throw new Error(`${k} cannot contain a newline`)
@@ -64,6 +76,7 @@ async function main(){
   writeFileSync('.env.local',text,{mode:0o600})
   console.log('\n.env.local written. Cryptographic application secrets were generated automatically.')
   if(values.NEXT_PUBLIC_APP_URL.startsWith('http://localhost')) console.log('WARNING: set NEXT_PUBLIC_APP_URL to the final HTTPS production origin before a real production launch.')
-  console.log('Next: run deploy.cmd')
+  if(values.CLOUDFLARE_CUSTOM_DOMAIN) console.log(`Cloudflare deploy will attach custom domain: ${values.CLOUDFLARE_CUSTOM_DOMAIN}`)
+  console.log('Next: run GO-LIVE.cmd (or deploy.cmd).')
 }
 try{await main()}finally{rl.close()}
