@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "guestatlas-maintenance",
+  "main": "workers/maintenance.ts",
+  "compatibility_date": "2026-09-06",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": ["15 2 * * *"]
+  },
+  "secrets": {
+    "required": ["APP_URL", "CRON_SECRET"]
+  }
+}
