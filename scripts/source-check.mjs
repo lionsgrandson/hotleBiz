@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const root = process.cwd()
-const ignored = new Set(['node_modules', '.next', '.git', '.vercel', '.open-next', '.wrangler', '.cloudflare-dry-run'])
+const ignored = new Set(['node_modules', '.next', '.git', '.vercel', '.open-next', '.wrangler', '.cloudflare-dry-run', '.temp'])
 const files = []
 function walk(dir) {
   for (const name of readdirSync(dir)) {
@@ -57,6 +57,13 @@ if (!middleware.includes('export async function middleware') && !middleware.incl
 const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
 if (!goLive.includes('finalize-workers-url.mjs') || !goLive.includes('deploy-and-capture.mjs') || !goLive.includes('workers_dev_auto')) throw new Error('GO-LIVE.cmd must support streamed automatic workers.dev URL discovery')
 
+const deployCapture = readFileSync(join(root, 'scripts/deploy-and-capture.mjs'), 'utf8')
+if (deployCapture.includes("'npx.cmd'") || deployCapture.includes('"npx.cmd"')) throw new Error('Windows deploy capture must not spawn npx.cmd directly')
+if (!deployCapture.includes('process.execPath') || !deployCapture.includes('node_modules/@opennextjs/cloudflare/dist/cli/index.js')) throw new Error('Deploy capture must launch the OpenNext JavaScript CLI with Node directly')
+
+const gitignore = readFileSync(join(root, '.gitignore'), 'utf8')
+if (!/^supabase\/\.temp\/$/m.test(gitignore)) throw new Error('Supabase CLI temp state must be gitignored')
+
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
   if (typeof version !== 'string' || /^[~^*><=]/.test(version) || version.includes('latest')) throw new Error(`Dependency ${name} must be exactly pinned; found ${version}`)
@@ -66,7 +73,8 @@ if (!pkg.devDependencies?.['@opennextjs/cloudflare'] || !pkg.devDependencies?.wr
 
 const wrangler = JSON.parse(readFileSync(join(root, 'wrangler.jsonc'), 'utf8'))
 if (!wrangler.compatibility_flags?.includes('nodejs_compat')) throw new Error('Cloudflare nodejs_compat flag is required')
-if (!wrangler.r2_buckets?.some((b) => b.binding === 'EVIDENCE_BUCKET' && b.bucket_name === 'guestatlas-evidence')) throw new Error('Private GuestAtlas evidence R2 binding is missing')
+const evidenceBindings = (wrangler.r2_buckets || []).filter((b) => b.bucket_name === 'guestatlas-evidence')
+if (evidenceBindings.length !== 1 || evidenceBindings[0].binding !== 'EVIDENCE_BUCKET') throw new Error('GuestAtlas must have exactly one private evidence R2 binding named EVIDENCE_BUCKET')
 if (!wrangler.observability?.enabled) throw new Error('Cloudflare observability must be enabled')
 if (wrangler.workers_dev !== true) throw new Error('workers.dev must remain enabled for automatic first-deploy URL bootstrap')
 
