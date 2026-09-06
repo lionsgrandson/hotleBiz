@@ -1,8 +1,14 @@
 node_modules
 .next
+.open-next
+.wrangler
+.cloudflare-dry-run
 .env
 .env.local
 .env.*.local
+.dev.vars
+.cloudflare.secrets.tmp.json
+.maintenance.secrets.tmp.json
 .vercel
 *.log
 .DS_Store
