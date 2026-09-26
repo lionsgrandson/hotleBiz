@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [{
       userAgent: '*',
       allow: ['/', '/privacy', '/terms', '/acceptable-use', '/cookies', '/accessibility', '/security', '/guest-rights'],
-      disallow: ['/api/', '/auth/', '/dashboard', '/guests', '/stays', '/feedback', '/incidents', '/moderation', '/disputes', '/audit', '/retention', '/team', '/settings', '/platform', '/guest-portal/', '/guest-access/', '/join/', '/mfa', '/onboarding', '/forgot-password', '/reset-password'],
+      disallow: ['/api/', '/auth/', '/dashboard', '/guests', '/stays', '/feedback', '/incidents', '/moderation', '/disputes', '/audit', '/retention', '/team', '/settings', '/platform', '/guest-portal/', '/guest-access/', '/join/', '/mfa', '/onboarding', '/forgot-password', '/reset-password', '/policy-acceptance', '/verification'],
     }],
     sitemap: `${base}/sitemap.xml`,
   }
