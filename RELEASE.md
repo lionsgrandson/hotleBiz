@@ -1,31 +1,39 @@
-# GuestAtlas 1.1 Cloudflare release scope
+# GuestAtlas 1.2 production hardening scope
 
-This repository contains the complete GuestAtlas network product surface plus its Cloudflare production runtime.
+## Product changes
 
-## Product
+- Public launch site instead of redirecting the root URL into the private dashboard.
+- Production Privacy Notice, Network Terms, Acceptable Use Policy, Cookie Notice, Accessibility Statement, Security page and security.txt.
+- Explicit separation between public pages and no-index private application surfaces.
+- Staff password-reset/recovery workflow.
+- Stronger staff signup with 12-character minimum password and explicit versioned terms/privacy acknowledgement.
+- Current-policy re-acknowledgement gate for existing staff.
+- Stronger property onboarding attestations.
+- Property privacy-contact and retention-governance settings.
+- Revocable, expiring staff invitations.
+- Seven-day rotating/revocable guest disclosure links.
+- Multiple incident evidence uploads: maximum five files, 10 MB each, 25 MB total, with MIME/signature validation.
+- Independent review for any severity 3–4 incident and any incident marked as a report that was not independently verified.
+- CSP, HSTS and expanded browser security headers.
+- Public robots/sitemap plus no-index controls for private surfaces.
+- Production health responses marked no-store.
 
-- Multi-hotel workspaces, hotel verification, staff roles, invitations and revocation.
-- Mandatory staff MFA by default.
-- Exact-match guest identity network with audited, short-lived access grants.
-- Local stay history and six-factor weighted hospitality feedback.
-- Serious incident documentation, evidence, two-person moderation and publication controls.
-- Guest disclosure, dispute/correction, temporary network withholding and transactional revision workflow.
-- Private evidence downloads, audit log, retention queue and platform administration.
-- Responsive authenticated dashboard plus legal/privacy/terms surfaces.
+## Infrastructure and deployment
 
-## Infrastructure
+- Cloudflare Workers + OpenNext.
+- Private Cloudflare R2 evidence.
+- Cloudflare Observability.
+- Separate maintenance Cron Worker.
+- Supabase Auth + PostgreSQL.
+- Direct `GO-LIVE.cmd` deployment from the local source folder.
+- No GitHub Actions workflow and no Git pull/push/commit dependency in the production deploy script.
+- Postgres migrations only; no broad `supabase config push`.
+- Live health smoke test after deployment.
 
-- Full Next.js web/API/server tier on Cloudflare Workers through OpenNext.
-- Private Cloudflare R2 for all new incident evidence.
-- Authenticated streaming evidence route with legacy Supabase Storage compatibility.
-- Cloudflare Smart Placement and Worker Observability.
-- Separate `guestatlas-maintenance` Cloudflare Worker with daily Cron Trigger.
-- Supabase Auth and PostgreSQL as the transactional identity/data layer behind the Worker.
-- Application-layer AES-256-GCM encryption and HMAC exact matching.
-- `configure.cmd`, `setup-local.cmd`, `GO-LIVE.cmd` and compatibility `deploy.cmd` for Windows.
-- `GO-LIVE.cmd` installs, validates, builds, dry-runs, commits/pushes, migrates and deploys the complete release.
-- Cloudflare and application runtime secrets are separated from deployment credentials.
+## Database migration
 
-## Launch responsibility
+`202609260003_launch_hardening.sql` adds staff policy-acknowledgement fields, property policy-version fields, revocable staff invitations and operational indexes.
 
-The code implements strong technical and product safeguards, but a real shared guest-information network still requires jurisdiction-specific counsel, operational security review, staging/integration testing, backup/restore testing and production monitoring before accepting real guest data. See `LEGAL_AND_PRIVACY.md`, `SECURITY.md`, `DEPLOYMENT.md` and `VALIDATION.md`.
+## Release boundary
+
+This release is technically hardened for public deployment, but real guest-data launch remains conditional on final legal/controller analysis, required registration/notification decisions, applicable DPO analysis, data-sharing/processing agreements, cross-border hosting review, backup/restore validation, security review and accessibility QA.
