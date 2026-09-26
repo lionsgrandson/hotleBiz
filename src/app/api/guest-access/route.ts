@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     await mustDb(admin.from('guest_portal_tokens').insert({ guest_id: guestId, source_hotel_id: hotel.id, token_hash: tokenHash(token), expires_at: new Date(Date.now() + 7 * 86400000).toISOString(), created_by: user.id }))
     await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'guest_portal_link_created', targetType: 'guest', targetId: guestId, purpose: 'guest access and correction rights',metadata:{validDays:7,previousLinksRevoked:true,fragmentCredential:true} })
     const base = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
-    const link = `${base}/guest-portal#access=${encodeURIComponent(token)}`
+    const link = `${base}/guest-portal/open#access=${encodeURIComponent(token)}`
     if((request.headers.get('content-type')||'').includes('application/json'))return ok({link,expiresInDays:7})
     return NextResponse.redirect(new URL(`/guest-access/${guestId}`, request.url), 303)
   } catch (e) { return fail(e, request) }
