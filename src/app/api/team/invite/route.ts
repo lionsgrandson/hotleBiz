@@ -14,15 +14,18 @@ export async function POST(request: Request) {
     if (!['admin', 'manager', 'reviewer', 'viewer'].includes(role)) throw new ApiError(400, 'Invalid role')
     if (role === 'admin' && !['owner', 'admin'].includes(String(membership.role))) throw new ApiError(403, 'Only owners/admins can invite admins')
 
+    const now = new Date().toISOString()
+    await mustDb(admin.from('hotel_invites').update({ revoked_at: now }).eq('hotel_id', hotel.id).eq('email', email).is('accepted_at', null).is('revoked_at', null))
     const token = randomToken()
-    await mustDb(admin.from('hotel_invites').insert({
+    const {data: invite, error: inviteError}=await admin.from('hotel_invites').insert({
       hotel_id: hotel.id,
       email,
       role,
       token_hash: tokenHash(token),
       expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
       invited_by: user.id,
-    }))
+    }).select('id').single()
+    if(inviteError)throw inviteError
 
     const url = `${process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin}/join/${token}`
     let emailSent = false
@@ -34,12 +37,12 @@ export async function POST(request: Request) {
           from: process.env.EMAIL_FROM || 'GuestAtlas <noreply@example.com>',
           to: [email],
           subject: `Invitation to ${hotel.name} on GuestAtlas`,
-          text: `You were invited to join ${hotel.name} on GuestAtlas.\n\nAccept invitation: ${url}\n\nThis link expires in 7 days.`,
+          text: `You were invited to join ${hotel.name} on GuestAtlas as ${role}.\n\nAccept invitation: ${url}\n\nThis link expires in 7 days. By accepting, you agree to the GuestAtlas Terms and Acceptable Use Policy available on the service.`,
         }),
       })
       emailSent = send.ok
     }
-    await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'staff_invited', targetType: 'hotel_invite', purpose: 'staff administration', metadata: { emailHash: tokenHash(email), role, emailSent } })
+    await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'staff_invited', targetType: 'hotel_invite', targetId:invite.id, purpose: 'staff administration', metadata: { emailHash: tokenHash(email), role, emailSent } })
     return NextResponse.redirect(new URL(`/team?invite=${encodeURIComponent(url)}`, request.url), 303)
   } catch (e) { return fail(e, request) }
 }
