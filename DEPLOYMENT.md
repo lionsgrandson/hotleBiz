@@ -1,139 +1,121 @@
-# Deployment
+# GuestAtlas production deployment
 
-## Production topology
+## Topology
 
-GuestAtlas runs its full Next.js server/runtime on **Cloudflare Workers** using `@opennextjs/cloudflare`. Static assets are served by the Worker asset binding. New incident evidence is stored in a private **Cloudflare R2** bucket. A separate Cloudflare Worker owns the daily retention Cron Trigger.
+GuestAtlas runs on Cloudflare Workers through `@opennextjs/cloudflare`. New evidence is stored in a private Cloudflare R2 bucket. A second Worker runs the retention-queue Cron. Supabase supplies PostgreSQL and Auth.
 
-Supabase provides Postgres and Auth behind the Worker. The browser only uses the publishable Auth configuration; business-data access and the Supabase secret key stay server-side.
+The browser receives only the Supabase publishable Auth configuration. The Supabase server key, encryption key, matching secret, audit secret, Cloudflare credentials and maintenance secret must remain server-side.
 
-## Fastest Windows deployment
+## Direct deployment
 
-Put `.env.local` beside the scripts if you already have one, then run:
+Production deployment is intentionally independent of GitHub Actions.
+
+From the project folder on Windows:
 
 ```text
 GO-LIVE.cmd
 ```
 
-If `.env.local` is missing, `GO-LIVE.cmd` automatically opens `configure.cmd`. `deploy.cmd` is an alias for `GO-LIVE.cmd`.
+`deploy.cmd` calls the same script.
 
-You do **not** need to know your GuestAtlas production URL before the first deployment. If no custom domain is supplied, the configuration uses automatic Workers.dev mode. Cloudflare assigns a URL such as `https://guestatlas.<account-subdomain>.workers.dev`; the deploy script captures it, updates `.env.local`, rebuilds with the real canonical origin, dry-runs the final bundle again, and redeploys.
+The source present in the local folder is what gets built and deployed. The release script never runs Git pull/push/commit/fetch operations.
 
-### Prerequisites
+## Required accounts
 
-- Cloudflare account with Workers/R2 enabled
-- Supabase project
+- Existing Supabase project.
+- Cloudflare account with Workers and R2 available.
+- Node.js 22+; `GO-LIVE.cmd` can install/upgrade Node through `winget`.
 
-Git and Node.js 22+ are installed automatically through Windows `winget` when missing and available.
+Wrangler can use an API token or interactive browser login. The Supabase CLI can use `SUPABASE_ACCESS_TOKEN` or interactive login.
 
-If `CLOUDFLARE_API_TOKEN` is absent, Wrangler opens browser login. If `SUPABASE_ACCESS_TOKEN` is absent, the Supabase CLI prompts login.
+## Environment
 
-## What GO-LIVE.cmd performs
+Use `configure.cmd`. Production validation requires the operator identity and the public privacy/security/accessibility contacts in addition to application secrets. This prevents publishing legal/support pages with placeholders.
 
-The script is fail-fast and stops at the first error:
+`.env.local` is local-only and gitignored.
 
-1. Syncs GitHub `main` before validation, preserving tracked local edits with autostash.
-2. Installs pinned dependencies.
-3. Runs the high/critical runtime dependency vulnerability gate.
-4. Loads `.env.local` and validates secrets/origin mode.
-5. Runs source integrity checks.
-6. Runs TypeScript checks.
-7. Runs application self-tests.
-8. Authenticates Cloudflare.
-9. Creates or verifies `guestatlas-evidence` R2.
-10. Runs the OpenNext Cloudflare production build.
-11. Runs dry-run validation against both generated Worker bundles.
-12. Commits and pushes the exact validated source to GitHub `main`.
-13. Links the Supabase project, applies migrations and verifies the expected Postgres schema.
-14. When using automatic Workers.dev mode, performs a temporary first Worker deployment and captures the assigned public URL from Wrangler output.
-15. Rewrites local environment configuration to the assigned URL, rebuilds and dry-runs again.
-16. Deploys the final GuestAtlas application Worker.
-17. Deploys `guestatlas-maintenance` with the daily `15 2 * * *` Cron Trigger.
-18. Deletes temporary deployment logs and secret bundles.
+## Release stages
 
-The server secret, encryption keys, matching key, audit key and deployment credentials remain in local/Cloudflare secret storage and are not committed.
+`GO-LIVE.cmd` is fail-fast:
 
-## Cloudflare configuration
+1. pin the known production origin;
+2. install exact dependencies from `package-lock.json`;
+3. run the high/critical runtime vulnerability gate;
+4. validate environment and source integrity;
+5. typecheck;
+6. run application cryptography/matching/scoring self-tests;
+7. build allow-listed Cloudflare runtime environment bundles;
+8. authenticate Cloudflare;
+9. verify/create `guestatlas-evidence` R2;
+10. build OpenNext;
+11. dry-run application Worker;
+12. dry-run maintenance Worker;
+13. authenticate/link the existing Supabase project;
+14. apply Postgres migrations with `supabase db push`;
+15. verify database tables;
+16. deploy the application Worker;
+17. deploy the maintenance Worker;
+18. run the live `/api/health` smoke check;
+19. delete temporary deployment bundles.
 
-`wrangler.jsonc` is the source of truth for the application Worker:
+`supabase config push` is intentionally not used.
 
-- `workers_dev` remains enabled so the first deployment can receive a Cloudflare-managed public origin.
-- `nodejs_compat` is enabled for Next.js/OpenNext and Node crypto compatibility.
-- `EVIDENCE_BUCKET` binds private R2 bucket `guestatlas-evidence`.
-- Smart Placement is enabled because application requests frequently call external database/auth services.
-- Observability is enabled.
-- Required runtime secrets are declared so missing production configuration causes a deployment error.
+## Required Supabase Auth dashboard settings
 
-`wrangler.maintenance.jsonc` defines the separate retention Cron Worker.
-
-## Evidence migration behavior
-
-All new evidence uses R2 paths prefixed with `r2/`. The evidence download route streams those objects only after MFA, role and source-property authorization.
-
-Existing evidence rows without the `r2/` prefix are treated as legacy Supabase Storage objects and remain readable through the authenticated route. This makes the Cloudflare migration non-destructive. No public R2 bucket or public evidence URL is required.
-
-## Automatic Workers.dev URL
-
-For the first deployment without a custom domain, `.env.local` uses:
+Production origin:
 
 ```text
-NEXT_PUBLIC_APP_URL=https://guestatlas-bootstrap.invalid
-GUESTATLAS_URL_MODE=workers_dev_auto
-CLOUDFLARE_CUSTOM_DOMAIN=
+https://guestatlas.mosheschwartzberg.workers.dev
 ```
 
-That bootstrap hostname is never intended for users. It is accepted only while automatic discovery is enabled. After the temporary Worker deploy, `scripts/finalize-workers-url.mjs` extracts the real `https://guestatlas.<account-subdomain>.workers.dev` origin from Wrangler output and changes the local file to:
+Set:
 
 ```text
-NEXT_PUBLIC_APP_URL=https://guestatlas.<account-subdomain>.workers.dev
-GUESTATLAS_URL_MODE=workers_dev_resolved
+Site URL = https://guestatlas.mosheschwartzberg.workers.dev
+Additional redirect = https://guestatlas.mosheschwartzberg.workers.dev/auth/confirm
+Additional redirect = https://guestatlas.mosheschwartzberg.workers.dev/auth/recovery
+Email confirmation = enabled
+TOTP MFA enrollment = enabled
+TOTP MFA verification = enabled
+Secure password change = enabled
 ```
 
-GuestAtlas is then rebuilt and redeployed with that real URL.
+The checked-in `supabase/config.toml` is a reference for these Auth values; the production script does not mass-push hosted configuration.
 
-## Custom domain later
+## Post-deploy acceptance
 
-When you are ready to move away from Workers.dev, set these values consistently in `.env.local`:
+Do not accept real guest information until these checks pass:
 
-```text
-NEXT_PUBLIC_APP_URL=https://guestatlas.example.com
-GUESTATLAS_URL_MODE=fixed
-CLOUDFLARE_CUSTOM_DOMAIN=guestatlas.example.com
-```
+- `/` loads the public launch page over HTTPS.
+- `/privacy`, `/terms`, `/acceptable-use`, `/accessibility`, `/security` and `/.well-known/security.txt` contain the correct operator/contact information.
+- `/api/health` returns `ok: true`.
+- Browser response headers contain CSP, HSTS, frame denial, content-type protection, referrer policy and permissions policy.
+- Staff signup requires terms/privacy acknowledgement and email confirmation.
+- Password reset returns through `/auth/recovery`.
+- Staff without AAL2 are routed to MFA and protected APIs reject the request.
+- Existing staff must accept the current policy version before private application access.
+- Pending/unverified properties cannot process network guest information.
+- Exact-match search does not permit name-only lookup and records a business purpose.
+- Cross-property views do not reveal contact data, raw evidence or the source property's local timeline.
+- Multi-file evidence accepts only supported signatures, size limits and private R2 storage.
+- Severity 3–4 and unverified/reported incidents require a second staff reviewer.
+- Guest disclosure links expire in seven days, rotate old links, and can be revoked.
+- Staff invitations expire and can be revoked.
+- Guest disputes withhold challenged adverse records from ordinary network consumers.
+- Property retention/contact settings save and are audited.
+- R2 has no public bucket/custom public URL.
+- Cloudflare Observability shows application and maintenance Worker events.
+- Daily `guestatlas-maintenance` Cron exists.
+- Supabase security advisors are reviewed.
+- Database backup/restore has been tested with a documented recovery procedure.
+- A real browser/device accessibility QA pass has been completed.
 
-The custom domain value is a hostname only, with no scheme/path/port. The domain must be in a Cloudflare zone available to the authenticated account.
+## Rollback
 
-## Supabase Auth setup
+Application rollback should use a previously validated Cloudflare Worker version/deployment. Database migrations must be designed as forward-compatible; do not blindly reverse a migration that has already accepted production data.
 
-After the first deployment, use the final URL printed by `GO-LIVE.cmd`:
+If a deployment creates a security/privacy regression, disable affected network workflows or suspend the affected property/user before debugging. Preserve audit evidence.
 
-1. Set Auth Site URL to that URL.
-2. Allow `<final-url>/auth/confirm` as a redirect.
-3. Set the Confirm signup template link to:
+## Custom domain
 
-```text
-{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
-```
-
-4. Create the first account and enroll TOTP MFA.
-5. Create the first property.
-6. Ensure your bootstrap email is listed in `PLATFORM_ADMIN_EMAILS`.
-7. Run `node scripts/promote-admin.mjs your@email.com`.
-8. Visit `/platform` and verify the property.
-
-## Post-deploy acceptance checks
-
-- `/api/health` returns 200.
-- The `guestatlas` Worker shows requests/logs in Cloudflare Observability.
-- `guestatlas-evidence` exists and is not publicly exposed.
-- Uploading incident evidence creates an `evidence_files.storage_path` starting with `r2/`.
-- Evidence download requires MFA and a permitted source-property role.
-- `guestatlas-maintenance` has the daily Cron Trigger.
-- `npm run verify` sees all expected Postgres tables.
-- Staff without MFA are routed to `/mfa` and API writes/searches fail.
-- A pending property cannot create/search network guest data.
-- Name-only guest lookup fails.
-- Multiple search identifiers must resolve to the same person.
-- Cross-property views hide contact details/local travel timeline/raw evidence.
-- Severity 3/4 incidents require a second authorized reviewer.
-- Guest portal tokens expire and cannot cross guest boundaries.
-- Property/member revocation takes effect immediately.
+The current production origin is the fixed Workers.dev URL. A future custom domain requires changing the canonical URL consistently in environment configuration, Supabase Auth Site URL/redirects, security.txt canonical URL, and Cloudflare deployment configuration. Do not switch only one layer.
