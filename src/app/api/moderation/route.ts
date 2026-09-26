@@ -10,14 +10,14 @@ export async function POST(request: Request) {
     const b = await body(request)
     const id = requiredString(b.incidentId, 'Incident', 60)
     const decision = String(b.decision)
-    const { data: incident, error } = await admin.from('incidents').select('id,created_by,status').eq('id', id).eq('hotel_id', hotel.id).maybeSingle()
+    const { data: incident, error } = await admin.from('incidents').select('id,created_by,status,severity,evidence_level').eq('id', id).eq('hotel_id', hotel.id).maybeSingle()
     if (error) throw error
     if (!incident) throw new ApiError(404, 'Incident not found')
     if (incident.status !== 'pending_review') throw new ApiError(409, 'Incident is not awaiting moderation')
-    if (incident.created_by === user.id) throw new ApiError(409, 'A serious incident must be reviewed by a different authorized staff member')
+    if (incident.created_by === user.id) throw new ApiError(409, 'A queued adverse incident must be reviewed by a different authorized staff member')
     if (!['publish','reject'].includes(decision)) throw new ApiError(400, 'Invalid decision')
 
-    await audit(admin, { hotelId: hotel.id, userId: user.id, action: decision === 'publish' ? 'incident_review_approval_requested' : 'incident_review_rejection_requested', targetType: 'incident', targetId: id, purpose: 'serious incident moderation' })
+    await audit(admin, { hotelId: hotel.id, userId: user.id, action: decision === 'publish' ? 'incident_review_approval_requested' : 'incident_review_rejection_requested', targetType: 'incident', targetId: id, purpose: 'adverse incident moderation',metadata:{severity:incident.severity,evidenceLevel:incident.evidence_level} })
     const now = new Date().toISOString()
     await mustDb(admin.from('incidents').update(decision === 'publish'
       ? { status: 'published', published_at: now, reviewed_by: user.id, reviewed_at: now }
