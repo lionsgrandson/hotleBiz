@@ -3,7 +3,7 @@ import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare'
 
 const isDev = process.env.NODE_ENV !== 'production'
 const scriptPolicy = isDev ? "'self' 'unsafe-inline' 'unsafe-eval'" : "'self' 'unsafe-inline'"
-const csp = [
+const cspDirectives = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -16,8 +16,9 @@ const csp = [
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
-  "upgrade-insecure-requests",
-].join('; ')
+]
+if(!isDev)cspDirectives.push("upgrade-insecure-requests")
+const csp=cspDirectives.join('; ')
 
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: csp },
