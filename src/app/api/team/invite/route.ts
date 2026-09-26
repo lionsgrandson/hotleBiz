@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { apiContext, body, fail, requiredString, ApiError, mustDb } from '@/lib/http'
+import { apiContext, body, fail, requiredString, ApiError, mustDb, ok } from '@/lib/http'
 import { MANAGE_ROLES } from '@/lib/auth'
 import { randomToken, tokenHash } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
@@ -17,13 +17,9 @@ export async function POST(request: Request) {
     const now = new Date().toISOString()
     await mustDb(admin.from('hotel_invites').update({ revoked_at: now }).eq('hotel_id', hotel.id).eq('email', email).is('accepted_at', null).is('revoked_at', null))
     const token = randomToken()
+    const expiresAt=new Date(Date.now() + 7 * 86400000).toISOString()
     const {data: invite, error: inviteError}=await admin.from('hotel_invites').insert({
-      hotel_id: hotel.id,
-      email,
-      role,
-      token_hash: tokenHash(token),
-      expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
-      invited_by: user.id,
+      hotel_id: hotel.id,email,role,token_hash: tokenHash(token),expires_at:expiresAt,invited_by: user.id,
     }).select('id').single()
     if(inviteError)throw inviteError
 
@@ -33,16 +29,12 @@ export async function POST(request: Request) {
       const send = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          from: process.env.EMAIL_FROM || 'GuestAtlas <noreply@example.com>',
-          to: [email],
-          subject: `Invitation to ${hotel.name} on GuestAtlas`,
-          text: `You were invited to join ${hotel.name} on GuestAtlas as ${role}.\n\nAccept invitation: ${url}\n\nThis link expires in 7 days. By accepting, you agree to the GuestAtlas Terms and Acceptable Use Policy available on the service.`,
-        }),
+        body: JSON.stringify({from: process.env.EMAIL_FROM || 'GuestAtlas <noreply@example.com>',to: [email],subject: `Invitation to ${hotel.name} on GuestAtlas`,text: `You were invited to join ${hotel.name} on GuestAtlas as ${role}.\n\nAccept invitation: ${url}\n\nThis link expires in 7 days. By accepting, you agree to the GuestAtlas Terms and Acceptable Use Policy available on the service.`}),
       })
       emailSent = send.ok
     }
     await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'staff_invited', targetType: 'hotel_invite', targetId:invite.id, purpose: 'staff administration', metadata: { emailHash: tokenHash(email), role, emailSent } })
-    return NextResponse.redirect(new URL(`/team?invite=${encodeURIComponent(url)}`, request.url), 303)
+    if((request.headers.get('content-type')||'').includes('application/json'))return ok({url,emailSent,expiresAt})
+    return NextResponse.redirect(new URL('/team', request.url), 303)
   } catch (e) { return fail(e, request) }
 }
