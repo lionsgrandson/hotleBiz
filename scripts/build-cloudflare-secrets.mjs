@@ -11,29 +11,18 @@ for (const raw of readFileSync(source, 'utf8').split(/\r?\n/)) {
 }
 
 const required = [
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
-  'SUPABASE_SECRET_KEY',
-  'PII_ENCRYPTION_KEY',
-  'MATCHING_SECRET',
-  'AUDIT_HASH_SECRET',
-  'NEXT_PUBLIC_APP_URL',
-  'REQUIRE_MFA',
-  'CRON_SECRET',
+  'NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY','SUPABASE_SECRET_KEY',
+  'PII_ENCRYPTION_KEY','MATCHING_SECRET','AUDIT_HASH_SECRET','NEXT_PUBLIC_APP_URL','REQUIRE_MFA','CRON_SECRET',
+  'NEXT_PUBLIC_LEGAL_NAME','NEXT_PUBLIC_PRIVACY_EMAIL','NEXT_PUBLIC_SECURITY_EMAIL','NEXT_PUBLIC_ACCESSIBILITY_EMAIL',
 ]
-const optional = ['RESEND_API_KEY', 'EMAIL_FROM', 'PLATFORM_ADMIN_EMAILS']
+const optional = ['RESEND_API_KEY','EMAIL_FROM','PLATFORM_ADMIN_EMAILS','NEXT_PUBLIC_DPO_EMAIL','NEXT_PUBLIC_LEGAL_ADDRESS','NEXT_PUBLIC_LEGAL_COUNTRY']
 const missing = required.filter((key) => !values[key] || values[key] === 'REPLACE_ME')
-if (missing.length) throw new Error(`Cannot build Cloudflare secrets; missing: ${missing.join(', ')}`)
+if (missing.length) throw new Error(`Cannot build Cloudflare environment bundle; missing: ${missing.join(', ')}`)
 
 const runtime = {}
 for (const key of [...required, ...optional]) if (values[key]) runtime[key] = values[key]
-const maintenance = {
-  APP_URL: values.NEXT_PUBLIC_APP_URL,
-  CRON_SECRET: values.CRON_SECRET,
-}
+const maintenance = { APP_URL: values.NEXT_PUBLIC_APP_URL, CRON_SECRET: values.CRON_SECRET }
 
-// Never copy deployment credentials such as CLOUDFLARE_API_TOKEN or
-// SUPABASE_ACCESS_TOKEN into either Worker.
 writeFileSync('.cloudflare.secrets.tmp.json', JSON.stringify(runtime, null, 2), { mode: 0o600 })
 writeFileSync('.maintenance.secrets.tmp.json', JSON.stringify(maintenance, null, 2), { mode: 0o600 })
-console.log('Prepared sanitized Cloudflare secret bundles.')
+console.log('Prepared allow-listed Cloudflare runtime environment bundles.')
