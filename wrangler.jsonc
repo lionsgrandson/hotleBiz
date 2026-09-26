@@ -3,7 +3,9 @@
   "name": "guestatlas",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-09-06",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
   "placement": {
     "mode": "smart"
@@ -31,7 +33,11 @@
       "AUDIT_HASH_SECRET",
       "NEXT_PUBLIC_APP_URL",
       "REQUIRE_MFA",
-      "CRON_SECRET"
+      "CRON_SECRET",
+      "NEXT_PUBLIC_LEGAL_NAME",
+      "NEXT_PUBLIC_PRIVACY_EMAIL",
+      "NEXT_PUBLIC_SECURITY_EMAIL",
+      "NEXT_PUBLIC_ACCESSIBILITY_EMAIL"
     ]
   }
 }
