@@ -8,7 +8,6 @@ export const metadata: Metadata = {
   title: { default: 'GuestAtlas', template: '%s · GuestAtlas' },
   description: 'Structured, auditable hotel guest stay feedback and incident intelligence with controlled access and guest correction rights.',
   applicationName: 'GuestAtlas',
-  alternates: { canonical: '/' },
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
