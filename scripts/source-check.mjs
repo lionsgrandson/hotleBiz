@@ -55,6 +55,9 @@ const requiredFiles = [
   'src/app/api/verification/route.ts',
   'src/app/api/verification/[id]/route.ts',
   'src/app/guest-rights/page.tsx',
+  'src/app/guest-portal/page.tsx',
+  'src/app/guest-portal/open/page.tsx',
+  'src/app/api/guest-portal/session/route.ts',
   'src/components/MfaGate.tsx',
   'src/lib/cloudflare.ts',
   'workers/maintenance.ts',
@@ -65,7 +68,7 @@ const requiredFiles = [
   'middleware.ts',
 ]
 for (const file of requiredFiles) if (!files.includes(join(root, file))) throw new Error(`Required product file missing: ${file}`)
-for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts','.github/workflows/ci.yml','scripts/deploy-and-capture.mjs','scripts/finalize-workers-url.mjs']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
+for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts','.github/workflows/ci.yml','scripts/deploy-and-capture.mjs','scripts/finalize-workers-url.mjs','src/app/guest-portal/[token]/page.tsx']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
 
 const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
 if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
@@ -95,8 +98,8 @@ for(const key of ['NEXT_PUBLIC_LEGAL_NAME','NEXT_PUBLIC_PRIVACY_EMAIL','NEXT_PUB
 
 const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8')
 if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
-const guestPortal = readFileSync(join(root, 'src/app/guest-portal/[token]/page.tsx'), 'utf8')
-if (!guestPortal.includes('/api/guest-portal/dispute') || !guestPortal.includes('Challenge / correction request')) throw new Error('Guest portal must retain record-level dispute submission controls')
+const guestPortal = readFileSync(join(root, 'src/app/guest-portal/page.tsx'), 'utf8')
+if (!guestPortal.includes('/api/guest-portal/dispute') || !guestPortal.includes('Challenge / correction request') || !guestPortal.includes('guest_identifiers') || !guestPortal.includes('stays')) throw new Error('Guest portal must retain complete disclosure and record-level dispute controls')
 
 const appLayout=readFileSync(join(root,'src/app/(app)/layout.tsx'),'utf8')
 if(!appLayout.includes('robots')||!appLayout.includes('POLICY_VERSION'))throw new Error('Authenticated application must remain noindex and policy-version gated')
