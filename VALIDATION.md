@@ -1,41 +1,42 @@
 # Validation status
 
-GuestAtlas is now validated as a Cloudflare Workers application rather than a Vercel deployment.
+GuestAtlas production validation is local/deployment-driven. GitHub Actions is not part of the release path.
 
-## Automated release checks
+## Automated checks before every `GO-LIVE.cmd` release
 
-`GO-LIVE.cmd` is fail-fast and executes these checks before production deployment:
+1. Lockfile-based dependency install.
+2. High/critical production dependency advisory gate.
+3. Production environment validation.
+4. Source/deployment integrity scan.
+5. TypeScript validation.
+6. Scoring, reputation, encryption, normalized HMAC matching and token-helper self-tests.
+7. OpenNext Cloudflare production build.
+8. Wrangler application dry-run.
+9. Wrangler maintenance Worker dry-run.
+10. Supabase migration push to the linked existing project.
+11. Database schema verification.
+12. Application Worker deployment.
+13. Maintenance Worker deployment.
+14. Live production health smoke check.
 
-1. Exact dependency installation.
-2. Environment validation.
-3. Source/deployment integrity scan.
-4. TypeScript validation.
-5. Weighted-score and cryptography/matching self-tests.
-6. OpenNext Cloudflare production build.
-7. Wrangler production bundle dry-run.
-8. Git push of the exact validated source.
-9. Supabase migration and schema verification.
-10. Main Worker deployment and scheduled-maintenance Worker deployment.
+The source checker also rejects the retired GitHub Actions workflow and old bootstrap Workers.dev discovery helpers, requires the launch-hardening migration and public legal/security surfaces, verifies Auth recovery/confirmation reference routes, checks mandatory production operator variables, verifies R2 and Observability configuration, and rejects Git operations in `GO-LIVE.cmd`.
 
-`npm run self-test` checks weighted scoring, 0–100 reputation output, confidence thresholds, rebook-rate calculation, AES-256-GCM encrypt/decrypt round-trip, deterministic normalized HMAC matching, identifier-domain separation and token helpers.
+## Manual production acceptance still required
 
-The source checker requires the OpenNext config, Cloudflare Worker config, private R2 evidence binding, maintenance Worker, observability, `nodejs_compat`, exact dependency pins and `GO-LIVE.cmd`. It rejects the retired Vercel deployment path and scans for obvious committed secrets and stale product branding.
+Automated tests cannot prove the complete behavior of third-party hosted Auth, browser accessibility, network security controls, legal compliance, or backup recovery. Before real guest data:
 
-## Cloudflare-specific checks
+- Test signup, confirmation, password reset, MFA enrollment and MFA verification with a real mailbox/device.
+- Test staff invitation acceptance and revocation.
+- Test hotel verification and immediate member suspension.
+- Test guest exact-match searches and limits.
+- Test cross-property disclosure minimization.
+- Test multiple evidence uploads/downloads and unauthorized evidence denial.
+- Test independent incident moderation.
+- Test guest disclosure links, rotation, expiry, revocation and disputes.
+- Test retention settings and queue generation.
+- Review Cloudflare/Supabase security dashboards and logs.
+- Test restore from a real database backup and document recovery objectives.
+- Test keyboard-only and screen-reader-critical workflows.
+- Review the final legal notices and participation agreements with qualified counsel.
 
-- `npm run cf:build` compiles Next.js through `@opennextjs/cloudflare`.
-- `wrangler deploy --dry-run --outdir .cloudflare-dry-run` validates the generated Worker bundle without publishing it.
-- `GO-LIVE.cmd` verifies or creates the `guestatlas-evidence` R2 bucket before deployment.
-- New evidence is written to R2 and downloaded only through the authenticated application route.
-- Legacy Supabase Storage evidence remains readable during migration.
-- The maintenance Worker is independently deployable and observable.
-
-## Current validation run
-
-A GitHub Actions workflow performs a fresh networked dependency installation, source check, typecheck, self-test, OpenNext Cloudflare build and Wrangler dry-run on every push to `main` and on pull requests. Its result is the dependency-resolved build gate for this repository.
-
-Do not treat a local source push as sufficient if this workflow is red. Fix the failing step and rerun it.
-
-## Launch validation still required
-
-Before accepting real guest data, complete the post-deploy checks in `DEPLOYMENT.md`, browser/device QA, authentication/MFA flows, real R2 upload/download tests, Supabase security advisors, Cloudflare WAF/rate-limit configuration, backup/restore testing, and an external security/privacy review.
+Passing `GO-LIVE.cmd` means the checked local source built, migrated, deployed and passed its defined technical checks. It is not a legal-compliance certification or an independent penetration test.
