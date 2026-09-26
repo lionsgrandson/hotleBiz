@@ -13,14 +13,14 @@ export async function POST(request: Request) {
     if (!user) throw new ApiError(401, 'Authentication required')
     const b = await body(request), token = requiredString(b.token, 'Token', 200)
     const admin = createAdminClient()
-    const { data: invite, error: inviteError } = await admin.from('hotel_invites').select('*').eq('token_hash', tokenHash(token)).gt('expires_at', new Date().toISOString()).is('accepted_at', null).maybeSingle()
+    const { data: invite, error: inviteError } = await admin.from('hotel_invites').select('*').eq('token_hash', tokenHash(token)).gt('expires_at', new Date().toISOString()).is('accepted_at', null).is('revoked_at',null).maybeSingle()
     if (inviteError) throw inviteError
-    if (!invite) throw new ApiError(404, 'Invitation is invalid or expired')
+    if (!invite) throw new ApiError(404, 'Invitation is invalid, revoked, or expired')
     if ((user.email || '').toLowerCase() !== invite.email.toLowerCase()) throw new ApiError(403, 'Invitation email does not match this account')
 
     await mustDb(admin.from('hotel_memberships').upsert({ hotel_id: invite.hotel_id, user_id: user.id, role: invite.role, status: 'active' }, { onConflict: 'hotel_id,user_id' }))
-    const accepted = await mustDb<any>(admin.from('hotel_invites').update({ accepted_at: new Date().toISOString(), accepted_by: user.id }).eq('id', invite.id).is('accepted_at', null).select('id').single())
-    if (!accepted?.data?.id) throw new ApiError(409, 'Invitation was already accepted')
+    const accepted = await mustDb<any>(admin.from('hotel_invites').update({ accepted_at: new Date().toISOString(), accepted_by: user.id }).eq('id', invite.id).is('accepted_at', null).is('revoked_at',null).select('id').single())
+    if (!accepted?.data?.id) throw new ApiError(409, 'Invitation is no longer active')
     await audit(admin, { hotelId: invite.hotel_id, userId: user.id, action: 'staff_invitation_accepted', targetType: 'hotel_invite', targetId: invite.id, purpose: 'staff administration' })
 
     const res = NextResponse.redirect(new URL('/dashboard', request.url), 303)
