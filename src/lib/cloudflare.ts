@@ -23,7 +23,12 @@ export function getEvidenceBucket(): R2BucketLike {
 }
 
 export const R2_EVIDENCE_PREFIX = 'r2/'
+export const R2_VERIFICATION_PREFIX = 'verification/'
 
 export function isR2EvidencePath(path: string) {
   return path.startsWith(R2_EVIDENCE_PREFIX)
+}
+
+export function isVerificationPath(path:string){
+  return path.startsWith(R2_VERIFICATION_PREFIX)
 }
