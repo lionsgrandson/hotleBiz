@@ -10,6 +10,7 @@ const nav=[
   {href:'/audit',label:'Audit log',manage:true},
   {href:'/retention',label:'Retention',manage:true},
   {href:'/team',label:'Team',manage:true},
+  {href:'/verification',label:'Verification',manage:true},
   {href:'/settings',label:'Settings',manage:true},
 ]
 export function Sidebar({ hotelName, hotelId, role, memberships, isAdmin=false }: {hotelName:string;hotelId:string;role:string;memberships:any[];isAdmin?:boolean}) {
