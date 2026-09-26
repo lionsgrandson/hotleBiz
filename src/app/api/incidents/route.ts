@@ -12,6 +12,9 @@ export const runtime = 'nodejs'
 const CATEGORIES = new Set(['property_damage','threats_violence','theft_report','harassment','noise_disturbance','smoking','unauthorized_guests','payment_dispute','fraud_suspicion','security_intervention','other'])
 const EVIDENCE_LEVELS = new Set(['observed','documented','reported'])
 const MIME_EXT: Record<string,string> = {'application/pdf':'.pdf','image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','text/plain':'.txt'}
+const MAX_FILE_BYTES=10*1024*1024
+const MAX_TOTAL_BYTES=25*1024*1024
+const MAX_FILES=5
 
 function validateFileSignature(bytes: Buffer, mime: string) {
   if (mime === 'application/pdf') return bytes.subarray(0,5).toString() === '%PDF-'
@@ -24,7 +27,7 @@ function validateFileSignature(bytes: Buffer, mime: string) {
 
 export async function POST(request: Request) {
   let createdIncidentId: string | null = null
-  let uploadedPath: string | null = null
+  const uploadedPaths: string[] = []
   let adminForCleanup: any = null
   let r2ForCleanup: ReturnType<typeof getEvidenceBucket> | null = null
   try {
@@ -32,7 +35,7 @@ export async function POST(request: Request) {
     adminForCleanup = admin
     if (hotel.verification_status !== 'verified') throw new ApiError(403, 'Property verification is required before processing guest network data.')
     const form = await request.formData()
-    if (!form.get('attest')) throw new ApiError(400, 'Accuracy attestation is required')
+    if (!form.get('attest')) throw new ApiError(400, 'Accuracy and minimization attestation is required')
 
     const guestId = requiredString(form.get('guestId'), 'Guest', 60)
     if (!await hasLocalGuestRelationship(admin, hotel.id, guestId)) throw new ApiError(409, 'Record the guest stay at this property before documenting an incident.')
@@ -57,7 +60,17 @@ export async function POST(request: Request) {
       if (!stay) throw new ApiError(400, 'Selected stay does not belong to this guest and property')
     }
 
-    const status = severity >= 3 ? 'pending_review' : 'published'
+    const files=form.getAll('evidence').filter((v):v is File=>v instanceof File&&v.size>0)
+    if(files.length>MAX_FILES)throw new ApiError(413,`Upload no more than ${MAX_FILES} evidence files`)
+    const totalBytes=files.reduce((sum,file)=>sum+file.size,0)
+    if(totalBytes>MAX_TOTAL_BYTES)throw new ApiError(413,'Combined evidence exceeds 25 MB')
+    for(const file of files){
+      if(file.size>MAX_FILE_BYTES)throw new ApiError(413,`Evidence file ${file.name.slice(0,80)} exceeds 10 MB`)
+      if(!(file.type in MIME_EXT))throw new ApiError(415,'Unsupported evidence file type')
+    }
+
+    const needsReview = severity >= 3 || evidenceLevel === 'reported'
+    const status = needsReview ? 'pending_review' : 'published'
     const { data: incident, error } = await admin.from('incidents').insert({
       hotel_id: hotel.id,
       guest_id: guestId,
@@ -76,39 +89,28 @@ export async function POST(request: Request) {
     if (error) throw error
     createdIncidentId = incident.id
 
-    const file = form.get('evidence')
-    if (file instanceof File && file.size > 0) {
-      if (file.size > 10 * 1024 * 1024) throw new ApiError(413, 'Evidence file exceeds 10 MB')
-      if (!(file.type in MIME_EXT)) throw new ApiError(415, 'Unsupported evidence file type')
-      const bytes = Buffer.from(await file.arrayBuffer())
-      if (!validateFileSignature(bytes, file.type)) throw new ApiError(415, 'Evidence content does not match its declared file type')
-      const hash = crypto.createHash('sha256').update(bytes).digest('hex')
-      const originalName = file.name.slice(-240) || `evidence${MIME_EXT[file.type]}`
-      uploadedPath = `${R2_EVIDENCE_PREFIX}${hotel.id}/${incident.id}/${crypto.randomUUID()}${MIME_EXT[file.type]}`
-      const bucket = getEvidenceBucket()
-      r2ForCleanup = bucket
-      await bucket.put(uploadedPath, bytes, {
-        httpMetadata: { contentType: file.type },
-        customMetadata: { sha256: hash, hotelId: hotel.id, incidentId: incident.id },
-      })
-      const { error: fileError } = await admin.from('evidence_files').insert({
-        incident_id: incident.id,
-        hotel_id: hotel.id,
-        storage_path: uploadedPath,
-        file_name_cipher: encryptPII(originalName),
-        mime_type: file.type,
-        size_bytes: file.size,
-        sha256: hash,
-        uploaded_by: user.id,
-      })
-      if (fileError) throw fileError
+    if(files.length){
+      const bucket=getEvidenceBucket()
+      r2ForCleanup=bucket
+      for(const file of files){
+        const bytes=Buffer.from(await file.arrayBuffer())
+        if(!validateFileSignature(bytes,file.type))throw new ApiError(415,`Evidence content does not match declared type for ${file.name.slice(0,80)}`)
+        const hash=crypto.createHash('sha256').update(bytes).digest('hex')
+        const originalName=file.name.slice(-240)||`evidence${MIME_EXT[file.type]}`
+        const path=`${R2_EVIDENCE_PREFIX}${hotel.id}/${incident.id}/${crypto.randomUUID()}${MIME_EXT[file.type]}`
+        await bucket.put(path,bytes,{httpMetadata:{contentType:file.type},customMetadata:{sha256:hash,hotelId:hotel.id,incidentId:incident.id}})
+        uploadedPaths.push(path)
+        const{error:fileError}=await admin.from('evidence_files').insert({incident_id:incident.id,hotel_id:hotel.id,storage_path:path,file_name_cipher:encryptPII(originalName),mime_type:file.type,size_bytes:file.size,sha256:hash,uploaded_by:user.id})
+        if(fileError)throw fileError
+      }
     }
 
-    await audit(admin, { hotelId: hotel.id, userId: user.id, action: status === 'published' ? 'incident_published' : 'incident_submitted_for_review', targetType: 'incident', targetId: incident.id, metadata: { guestId, severity, category, evidenceLevel, hasEvidence: Boolean(uploadedPath), evidenceBackend: uploadedPath ? 'cloudflare-r2' : null } })
+    await audit(admin,{hotelId:hotel.id,userId:user.id,action:status==='published'?'incident_published':'incident_submitted_for_review',targetType:'incident',targetId:incident.id,metadata:{guestId,severity,category,evidenceLevel,evidenceCount:files.length,evidenceBytes:totalBytes,evidenceBackend:files.length?'cloudflare-r2':null,reviewReason:needsReview?(severity>=3?'severity':'unverified-report'):null}})
     return NextResponse.redirect(new URL(status === 'pending_review' ? '/moderation' : '/incidents', request.url), 303)
   } catch (e) {
-    // Best-effort rollback for the database + R2 sequence if later validation/persistence fails.
-    if (r2ForCleanup && uploadedPath) { try { await r2ForCleanup.delete(uploadedPath) } catch {} }
+    if (r2ForCleanup && uploadedPaths.length) {
+      for(const path of uploadedPaths){try{await r2ForCleanup.delete(path)}catch{}}
+    }
     if (adminForCleanup && createdIncidentId) { try { await adminForCleanup.from('incidents').delete().eq('id', createdIncidentId) } catch {} }
     return fail(e, request)
   }
