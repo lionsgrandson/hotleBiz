@@ -1,9 +1,11 @@
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tokenHash, decryptPII } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
+export const metadata:Metadata={robots:{index:false,follow:false,nocache:true}}
 
 export default async function Portal({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ submitted?: string; error?: string }> }) {
   const { token } = await params
