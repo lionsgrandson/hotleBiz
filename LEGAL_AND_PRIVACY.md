@@ -1,52 +1,122 @@
-# Legal and privacy launch checklist
+# Legal, privacy and accessibility launch checklist
 
-This file is a product/compliance engineering checklist, not legal advice.
+This is product/compliance engineering documentation, not a legal opinion. The technical system can enforce controls; it cannot decide the operator's legal status or replace jurisdiction-specific counsel.
 
-## Israel
+## Israel — current launch issues
 
-The product's core business model is specifically important under the Israeli Privacy Protection Law because it collects personal information for disclosure to participating third parties. Following Amendment 13, the Privacy Protection Authority states that a database whose primary purpose is collecting personal information for transfer to third parties as a business or for consideration, and which contains information about more than 10,000 people, is among the categories that remain subject to database registration. Databases not requiring registration still remain subject to the law's purpose limitation, confidentiality, security and data-subject-rights requirements.
+GuestAtlas is a shared personal-information network. That is materially different from an ordinary hotel CRM.
 
-The Israeli Privacy Protection Authority's information-security guidance also requires access privileges to be limited to what an employee needs for the job. Its security rules address identification/authentication, encrypted transmission, access logging and retention of certain technical/security records for 24 months. These requirements are why GuestAtlas uses individual accounts, roles, server-only data access, encrypted transport through hosted HTTPS, and audit logging.
+Under Amendment 13 to the Israeli Privacy Protection Law, the former general database-registration duty was narrowed. However, section 8A keeps registration for specified databases, including a database whose main purpose is collecting personal information for lawful disclosure to others as a business or for consideration when it contains personal information about more than 10,000 people.
 
-Before launch, Israeli counsel should determine at minimum:
-- Who is the database controller / בעל שליטה and whether GuestAtlas and/or participating hotels are joint/separate controllers.
-- Whether the database must be registered, including the >10,000-person third-party-disclosure trigger.
-- Whether any notification obligation applies to specially sensitive personal information at scale.
-- Required database definition documents and security classification.
-- Appointment requirements for privacy/security officers.
-- The lawful basis and notices for collection from hotels and disclosure to other hotels.
-- Right of access, correction, deletion/objection procedures and identity verification.
-- Defamation, consumer-contract, discrimination and unfair-business-practice exposure from adverse guest reports.
-- International hosting/transfer requirements for the selected Cloudflare Worker/R2 and Supabase regions and for participating hotels outside Israel.
+A separate notice regime applies to a non-registration database that contains specially sensitive personal information about more than 100,000 people.
 
-## Product policy recommended for counsel to preserve
+Amendment 13 has also introduced/expanded DPO appointment duties for specified organizations. The Privacy Protection Authority published final DPO guidance in July 2026. The operator must assess the actual business, scale, processing and organizational structure against that guidance.
 
-- No public or name-only guest directory.
-- Purpose-limited, logged search.
-- No protected-trait fields or ratings.
-- No automated booking rejection.
-- Factual, stay-specific contribution rules.
-- Evidence status visible for incidents.
-- Two-person approval for serious adverse records.
-- Guest disclosure/correction/dispute mechanism, with challenged adverse records withheld from network consumers while reviewed.
-- Expiry/retention review rather than permanent records by default.
-- Strong consequences for malicious or knowingly false submissions.
+The Israeli cross-border transfer regulations must be assessed for the selected Cloudflare/Supabase regions and for participating properties outside Israel.
+
+Before real-data launch, Israeli counsel should determine and document:
+
+- the database controller / בעל שליטה structure;
+- whether GuestAtlas and participating properties are separate, joint, or processor/controller parties for each workflow;
+- whether and when section 8A registration is required, including the >10,000 third-party-disclosure threshold;
+- whether the >100,000 specially-sensitive-information notice duty could apply;
+- DPO appointment duties;
+- database definition/security-classification documents;
+- notices and lawful authority/basis for collection, hotel contribution and inter-hotel disclosure;
+- guest access/correction/deletion/objection procedures and identity verification;
+- defamation exposure and review standards for adverse guest allegations;
+- anti-discrimination requirements and prohibited-proxy policy;
+- data-processing/data-sharing agreements with participating hotels;
+- Cloudflare/Supabase processor terms, subprocessors and international-transfer safeguards;
+- retention periods for identity, stay feedback, incidents, evidence, disputes and security logs;
+- breach-response and regulator-notification duties;
+- contract/consumer-law disclosures, limitations and governing-law language.
+
+## DPO / privacy governance
+
+The production environment supports public privacy and DPO contact fields. Do not populate a DPO contact merely for appearances. Determine whether appointment is legally required and whether the person has the required independence, expertise and organizational access.
+
+Operationally, a privacy owner should be responsible for:
+- privacy notices and policy versioning;
+- guest-rights requests;
+- hotel participation/privacy onboarding;
+- retention decisions;
+- vendor/subprocessor reviews;
+- incident/breach response;
+- regulator contact;
+- periodic access and audit review.
+
+## Accessibility
+
+Israeli internet-service accessibility rules reference Israeli Standard 5568 and level AA where applicable. GuestAtlas includes a public accessibility statement, skip link, visible focus behavior, semantic labels, keyboard-oriented controls, and responsive layouts, but launch still requires a real accessibility QA pass. Uploaded third-party evidence/documents need their own handling.
+
+## Product safeguards that should remain
+
+- no public guest directory;
+- no name-only network lookup;
+- exact-match identity requirements;
+- logged business purpose;
+- role and property verification;
+- mandatory staff MFA;
+- no protected-trait rating fields;
+- no automatic booking rejection;
+- factual contribution rules;
+- evidence status;
+- independent review for serious or unverified adverse incidents;
+- guest disclosure/correction/dispute workflow;
+- dispute withholding;
+- short-lived/revocable disclosure links;
+- revocable staff access;
+- configurable retention review instead of indefinite default retention;
+- append-only application audit history.
 
 ## Retention
 
-The database includes configurable hotel retention periods and a retention queue. It intentionally does not silently delete substantive guest/incident records on a generic timer, because the correct retention period depends on legal basis, claims limitation periods, disputes and jurisdiction. `queue_retention_candidates()` identifies records for review. The Cloudflare maintenance Worker refreshes candidates daily; it does not automatically erase substantive guest records. `prune_old_audit_logs()` implements a 24-month cutoff for technical audit records but is not auto-scheduled; enable it only after counsel confirms that this fits the deployed database's obligations.
+Property settings control review periods within bounded ranges:
+- feedback: 6–120 months;
+- incidents: 12–180 months;
+- guest identity: 12–180 months.
 
-## Infrastructure/privacy review items
+Crossing a review date queues a record; it does not automatically delete substantive data. Destructive processing should be implemented only against an approved retention policy that handles related R2 evidence, disputes, claims holds and legal obligations consistently.
 
-- Confirm the selected Cloudflare and Supabase account/region configuration meets applicable transfer and data-residency requirements.
-- Keep the R2 evidence bucket private and do not expose a public/custom bucket domain.
-- Review Cloudflare and Supabase subprocessors, contractual terms and data-processing agreements for the actual commercial launch.
-- Define retention/deletion procedures for R2 objects together with their corresponding database evidence records.
-- Define incident-response procedures that cover both Cloudflare and Supabase access credentials, logs and backups.
+Technical/audit-log retention also requires legal/security review. The existing controlled prune function is not scheduled automatically.
 
-## Source links reviewed during implementation
+## Cross-border processing
 
-- Israel Privacy Protection Authority: database registration service and Amendment 13 registration categories.
-- Israel Privacy Protection Authority: Information Security Regulations implementation guide, including least-privilege access, identification/authentication, communications security and 24-month technical-data retention guidance.
+Do not assume that using a major cloud provider alone satisfies Israeli transfer rules. The operator should record:
+- where Supabase database/Auth are hosted;
+- where Cloudflare Workers/R2 may process/store data;
+- the legal transfer basis;
+- contractual undertakings;
+- subprocessor chain;
+- participating-hotel locations;
+- any localization or transfer limitations.
 
-Re-check these sources immediately before launch because privacy law, regulator guidance and platform obligations can change.
+## Pre-launch evidence pack
+
+Keep a dated launch file containing:
+- final public policies;
+- signed hotel participation/data-processing terms;
+- registration/notification decision memo;
+- DPO decision memo;
+- system/data-flow diagram;
+- vendor/region list;
+- security risk assessment;
+- access-role matrix;
+- retention schedule;
+- incident-response plan;
+- backup/restore test;
+- accessibility QA results;
+- production acceptance test results.
+
+## Authoritative sources to re-check at launch
+
+Use the current Israel Privacy Protection Authority / Ministry of Justice materials for:
+- Amendment 13 and database registration;
+- notice duty for specially sensitive information at scale;
+- DPO guidance;
+- Privacy Protection (Data Security) Regulations;
+- transfer of information outside Israel;
+- applicable accessibility regulations and Israeli Standard 5568.
+
+Regulator guidance and thresholds can change; re-check immediately before commercial launch and again as the network scales.
