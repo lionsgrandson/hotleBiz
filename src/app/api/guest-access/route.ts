@@ -12,9 +12,11 @@ export async function POST(request: Request) {
     const b = await body(request)
     const guestId = requiredString(b.guestId, 'Guest', 60)
     if (!await hasLocalGuestRelationship(admin, hotel.id, guestId)) throw new ApiError(403, 'This property has no verified relationship with the guest')
+    const now=new Date().toISOString()
+    await mustDb(admin.from('guest_portal_tokens').update({revoked_at:now}).eq('guest_id',guestId).eq('source_hotel_id',hotel.id).is('revoked_at',null))
     const token = randomToken()
-    await mustDb(admin.from('guest_portal_tokens').insert({ guest_id: guestId, source_hotel_id: hotel.id, token_hash: tokenHash(token), expires_at: new Date(Date.now() + 30 * 86400000).toISOString(), created_by: user.id }))
-    await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'guest_portal_link_created', targetType: 'guest', targetId: guestId, purpose: 'guest access and correction rights' })
+    await mustDb(admin.from('guest_portal_tokens').insert({ guest_id: guestId, source_hotel_id: hotel.id, token_hash: tokenHash(token), expires_at: new Date(Date.now() + 7 * 86400000).toISOString(), created_by: user.id }))
+    await audit(admin, { hotelId: hotel.id, userId: user.id, action: 'guest_portal_link_created', targetType: 'guest', targetId: guestId, purpose: 'guest access and correction rights',metadata:{validDays:7,previousLinksRevoked:true} })
     const base = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
     const link = `${base}/guest-portal/${token}`
     return NextResponse.redirect(new URL(`/guest-access/${guestId}?link=${encodeURIComponent(link)}`, request.url), 303)
