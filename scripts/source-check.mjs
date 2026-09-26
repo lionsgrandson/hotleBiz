@@ -32,11 +32,25 @@ if (obviousSecrets.length) throw new Error(`Possible committed secret in: ${[...
 const requiredFiles = [
   'supabase/migrations/202609060001_init.sql',
   'supabase/migrations/202609060002_hardening.sql',
+  'supabase/migrations/202609260003_launch_hardening.sql',
+  'src/app/page.tsx',
+  'src/app/privacy/page.tsx',
+  'src/app/terms/page.tsx',
+  'src/app/acceptable-use/page.tsx',
+  'src/app/cookies/page.tsx',
+  'src/app/accessibility/page.tsx',
+  'src/app/security/page.tsx',
+  'src/app/.well-known/security.txt/route.ts',
+  'src/app/forgot-password/page.tsx',
+  'src/app/reset-password/page.tsx',
+  'src/app/auth/recovery/route.ts',
+  'src/app/policy-acceptance/page.tsx',
   'src/app/api/search/route.ts',
   'src/app/api/guests/route.ts',
   'src/app/api/incidents/route.ts',
   'src/app/api/evidence/[id]/route.ts',
   'src/app/api/guest-portal/dispute/route.ts',
+  'src/app/api/settings/route.ts',
   'src/app/guest-rights/page.tsx',
   'src/components/MfaGate.tsx',
   'src/lib/cloudflare.ts',
@@ -46,12 +60,9 @@ const requiredFiles = [
   'open-next.config.ts',
   'GO-LIVE.cmd',
   'middleware.ts',
-  'scripts/deploy-and-capture.mjs',
-  'scripts/finalize-workers-url.mjs',
-  'scripts/pin-production-url.mjs',
 ]
 for (const file of requiredFiles) if (!files.includes(join(root, file))) throw new Error(`Required product file missing: ${file}`)
-for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
+for (const retired of ['vercel.json','scripts/sync-vercel-env.mjs','proxy.ts','.github/workflows/ci.yml','scripts/deploy-and-capture.mjs','scripts/finalize-workers-url.mjs']) if (files.includes(join(root, retired))) throw new Error(`Retired/incompatible deployment file still present: ${retired}`)
 
 const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
 if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
@@ -59,31 +70,33 @@ if (!middleware.includes('export async function middleware') && !middleware.incl
 const productionUrl = 'https://guestatlas.mosheschwartzberg.workers.dev'
 const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
 if (!goLive.includes('pin-production-url.mjs')) throw new Error('GO-LIVE.cmd must pin the final production URL')
-if (/\bnpx\s+supabase\s+config\s+push\b/i.test(goLive)) throw new Error('GO-LIVE.cmd must not run supabase config push; it can sync paid/optional hosted services')
-if (!goLive.includes('supabase db push')) throw new Error('GO-LIVE.cmd must still apply Postgres migrations')
+if (/\bnpx\s+supabase\s+config\s+push\b/i.test(goLive)) throw new Error('GO-LIVE.cmd must not run supabase config push')
+if (!goLive.includes('supabase db push')) throw new Error('GO-LIVE.cmd must apply Postgres migrations')
+if (/\bgit\s+(?:pull|push|fetch|commit|reset|checkout)\b/i.test(goLive)) throw new Error('GO-LIVE.cmd must not depend on Git operations')
+if (!goLive.includes('/api/health')) throw new Error('GO-LIVE.cmd must run a production health smoke check')
 const pinUrl = readFileSync(join(root, 'scripts/pin-production-url.mjs'), 'utf8')
 if (!pinUrl.includes(productionUrl) || !pinUrl.includes("workers_dev_resolved")) throw new Error('Production URL pin helper must enforce the final GuestAtlas workers.dev URL')
 
 const supabaseConfig = readFileSync(join(root, 'supabase/config.toml'), 'utf8')
 if (!supabaseConfig.includes(`site_url = "${productionUrl}"`)) throw new Error('Supabase Auth site_url reference must use the final GuestAtlas production URL')
-if (!supabaseConfig.includes(`additional_redirect_urls = ["${productionUrl}/auth/confirm"]`)) throw new Error('Supabase Auth redirect reference must include the GuestAtlas /auth/confirm route')
+if (!supabaseConfig.includes(`${productionUrl}/auth/confirm`) || !supabaseConfig.includes(`${productionUrl}/auth/recovery`)) throw new Error('Supabase Auth redirects must include confirm and recovery callbacks')
 if (/localhost:3000/.test(supabaseConfig)) throw new Error('Supabase config must not contain localhost:3000')
 if (/^\[storage\]/m.test(supabaseConfig)) throw new Error('Hosted Storage config must not be managed by config.toml in the free-tier release flow')
-if (!/schemas\s*=\s*\["public",\s*"graphql_public"\]/.test(supabaseConfig)) throw new Error('Data API schemas should stay on the existing free-tier-safe public/graphql_public set')
+if (!/schemas\s*=\s*\["public",\s*"graphql_public"\]/.test(supabaseConfig)) throw new Error('Data API schemas should stay on the existing public/graphql_public set')
 if (!/\[auth\.mfa\.totp\][\s\S]*enroll_enabled\s*=\s*true[\s\S]*verify_enabled\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep TOTP MFA enabled')
 if (!/\[auth\.email\][\s\S]*enable_confirmations\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep email confirmations enabled')
+if (!/\[auth\.email\][\s\S]*secure_password_change\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must enable secure password change')
+
+const envExample=readFileSync(join(root,'.env.example'),'utf8')
+for(const key of ['NEXT_PUBLIC_LEGAL_NAME','NEXT_PUBLIC_PRIVACY_EMAIL','NEXT_PUBLIC_SECURITY_EMAIL','NEXT_PUBLIC_ACCESSIBILITY_EMAIL']) if(!envExample.includes(`${key}=`)) throw new Error(`Missing production public operator setting ${key}`)
 
 const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8')
 if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
 const guestPortal = readFileSync(join(root, 'src/app/guest-portal/[token]/page.tsx'), 'utf8')
 if (!guestPortal.includes('/api/guest-portal/dispute') || !guestPortal.includes('Challenge / correction request')) throw new Error('Guest portal must retain record-level dispute submission controls')
 
-const deployCapture = readFileSync(join(root, 'scripts/deploy-and-capture.mjs'), 'utf8')
-if (deployCapture.includes("'npx.cmd'") || deployCapture.includes('"npx.cmd"')) throw new Error('Windows deploy capture must not spawn npx.cmd directly')
-if (!deployCapture.includes('process.execPath') || !deployCapture.includes('node_modules/@opennextjs/cloudflare/dist/cli/index.js')) throw new Error('Deploy capture must launch the OpenNext JavaScript CLI with Node directly')
-
-const gitignore = readFileSync(join(root, '.gitignore'), 'utf8')
-if (!/^supabase\/\.temp\/$/m.test(gitignore)) throw new Error('Supabase CLI temp state must be gitignored')
+const appLayout=readFileSync(join(root,'src/app/(app)/layout.tsx'),'utf8')
+if(!appLayout.includes('robots')||!appLayout.includes('POLICY_VERSION'))throw new Error('Authenticated application must remain noindex and policy-version gated')
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 for (const [name, version] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies })) {
@@ -99,4 +112,4 @@ if (evidenceBindings.length !== 1 || evidenceBindings[0].binding !== 'EVIDENCE_B
 if (!wrangler.observability?.enabled) throw new Error('Cloudflare observability must be enabled')
 if (wrangler.workers_dev !== true) throw new Error('workers.dev must remain enabled for the production GuestAtlas Worker')
 
-console.log(`GuestAtlas Cloudflare source check passed (${files.length} files scanned).`)
+console.log(`GuestAtlas production source check passed (${files.length} files scanned).`)
