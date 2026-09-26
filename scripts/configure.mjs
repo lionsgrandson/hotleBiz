@@ -11,6 +11,7 @@ const defaults = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_acYHRkPvi1VsM8ovbQ2FpQ_PL4tK-PH',
   SUPABASE_PROJECT_REF: 'dcyzzfhvazavhcrgdlmo',
   NEXT_PUBLIC_APP_URL: 'https://guestatlas.mosheschwartzberg.workers.dev',
+  NEXT_PUBLIC_LEGAL_COUNTRY: 'Israel',
 }
 
 const current = {}
@@ -40,7 +41,7 @@ async function askOptional(label, key) {
 }
 
 async function main(){
-  console.log('\nGuestAtlas configuration wizard')
+  console.log('\nGuestAtlas production configuration wizard')
   console.log('This writes .env.local. High-entropy application secrets are generated automatically.')
   console.log(`Production URL is pinned to ${defaults.NEXT_PUBLIC_APP_URL}.\n`)
 
@@ -54,8 +55,14 @@ async function main(){
   const secret=await ask('Supabase server secret key','SUPABASE_SECRET_KEY')
   const projectRef=await ask('Supabase project ref','SUPABASE_PROJECT_REF')
 
-  const appUrl=defaults.NEXT_PUBLIC_APP_URL
-  const urlMode='workers_dev_resolved'
+  console.log('\nPublic legal/operator information (shown on the production site):')
+  const legalName=await ask('Legal operator / company name','NEXT_PUBLIC_LEGAL_NAME')
+  const privacyEmail=await ask('Privacy contact email','NEXT_PUBLIC_PRIVACY_EMAIL')
+  const securityEmail=await ask('Security disclosure email','NEXT_PUBLIC_SECURITY_EMAIL')
+  const accessibilityEmail=await ask('Accessibility contact email','NEXT_PUBLIC_ACCESSIBILITY_EMAIL')
+  const dpoEmail=await askOptional('DPO / privacy officer email; optional unless required','NEXT_PUBLIC_DPO_EMAIL')
+  const legalAddress=await askOptional('Legal / registered address; optional until counsel confirms public wording','NEXT_PUBLIC_LEGAL_ADDRESS')
+  const legalCountry=await ask('Operator country','NEXT_PUBLIC_LEGAL_COUNTRY','Israel')
 
   const adminEmails=await askOptional('Bootstrap platform admin email(s), comma separated; optional','PLATFORM_ADMIN_EMAILS')
   const resend=await askOptional('Resend API key; optional','RESEND_API_KEY')
@@ -76,8 +83,15 @@ async function main(){
     PII_ENCRYPTION_KEY:pii,
     MATCHING_SECRET:matching,
     AUDIT_HASH_SECRET:audit,
-    NEXT_PUBLIC_APP_URL:appUrl,
-    GUESTATLAS_URL_MODE:urlMode,
+    NEXT_PUBLIC_APP_URL:defaults.NEXT_PUBLIC_APP_URL,
+    GUESTATLAS_URL_MODE:'workers_dev_resolved',
+    NEXT_PUBLIC_LEGAL_NAME:legalName,
+    NEXT_PUBLIC_PRIVACY_EMAIL:privacyEmail,
+    NEXT_PUBLIC_SECURITY_EMAIL:securityEmail,
+    NEXT_PUBLIC_ACCESSIBILITY_EMAIL:accessibilityEmail,
+    NEXT_PUBLIC_DPO_EMAIL:dpoEmail,
+    NEXT_PUBLIC_LEGAL_ADDRESS:legalAddress,
+    NEXT_PUBLIC_LEGAL_COUNTRY:legalCountry,
     RESEND_API_KEY:resend,
     EMAIL_FROM:emailFrom,
     PLATFORM_ADMIN_EMAILS:adminEmails,
@@ -95,7 +109,7 @@ async function main(){
   writeFileSync('.env.local',text,{mode:0o600})
 
   console.log('\n.env.local written. Cryptographic application secrets were generated automatically.')
-  console.log(`Production URL: ${appUrl}`)
+  console.log(`Production URL: ${defaults.NEXT_PUBLIC_APP_URL}`)
   console.log('Next: run GO-LIVE.cmd (or deploy.cmd).')
 }
 
