@@ -19,6 +19,9 @@ create table public.data_rights_requests (
 );
 create index data_rights_hotel_status_idx on public.data_rights_requests(source_hotel_id,status,created_at);
 create index data_rights_guest_idx on public.data_rights_requests(guest_id,created_at desc);
+create unique index data_rights_one_open_type_idx
+  on public.data_rights_requests(guest_id,source_hotel_id,request_type)
+  where status in ('pending','identity_verified','in_progress');
 
 create table public.hotel_compliance_profiles (
   hotel_id uuid primary key references public.hotels(id) on delete cascade,
