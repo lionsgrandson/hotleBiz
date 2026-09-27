@@ -21,6 +21,15 @@ if(!autoBootstrap && app.hostname===bootstrapHost){console.error('Bootstrap URL 
 
 if(production && app.protocol!=='https:'){console.error('Production NEXT_PUBLIC_APP_URL must use HTTPS');process.exit(1)}
 if(production && ['localhost','127.0.0.1','::1'].includes(app.hostname)){console.error('Production NEXT_PUBLIC_APP_URL cannot be localhost');process.exit(1)}
+if(production){
+  const legalName=(process.env.OPERATOR_LEGAL_NAME||'').trim()
+  const privacyEmail=(process.env.PRIVACY_CONTACT_EMAIL||'').trim()
+  const supportEmail=(process.env.SUPPORT_EMAIL||'').trim()
+  if(!legalName || /REPLACE_|example/i.test(legalName)){console.error('Production OPERATOR_LEGAL_NAME must be the real legal operator/company name');process.exit(1)}
+  const validEmail=(v)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) && !/@example\.com$/i.test(v)
+  if(!validEmail(privacyEmail)){console.error('Production PRIVACY_CONTACT_EMAIL must be a real monitored email address');process.exit(1)}
+  if(!validEmail(supportEmail)){console.error('Production SUPPORT_EMAIL must be a real monitored email address');process.exit(1)}
+}
 
 try { const supa=new URL(process.env.NEXT_PUBLIC_SUPABASE_URL); if(supa.protocol!=='https:') throw new Error() } catch { console.error('NEXT_PUBLIC_SUPABASE_URL must be a valid HTTPS URL'); process.exit(1) }
 

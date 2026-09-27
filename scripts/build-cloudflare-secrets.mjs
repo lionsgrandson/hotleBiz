@@ -21,7 +21,7 @@ const required = [
   'REQUIRE_MFA',
   'CRON_SECRET',
 ]
-const optional = ['RESEND_API_KEY', 'EMAIL_FROM', 'PLATFORM_ADMIN_EMAILS']
+const optional = ['RESEND_API_KEY', 'EMAIL_FROM', 'PLATFORM_ADMIN_EMAILS', 'OPERATOR_LEGAL_NAME', 'PRIVACY_CONTACT_EMAIL', 'SUPPORT_EMAIL']
 const missing = required.filter((key) => !values[key] || values[key] === 'REPLACE_ME')
 if (missing.length) throw new Error(`Cannot build Cloudflare secrets; missing: ${missing.join(', ')}`)
 

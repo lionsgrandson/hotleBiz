@@ -1,5 +1,5 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-call GO-LIVE.cmd
+call UPLOAD-PRODUCTION.cmd
 exit /b %ERRORLEVEL%

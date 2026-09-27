@@ -5,11 +5,11 @@ const tables=[
   'profiles','platform_admins','hotels','hotel_memberships','hotel_invites',
   'guests','guest_identifiers','guest_access_grants','guest_hotel_links','stays',
   'stay_feedback','incidents','evidence_files','disputes','guest_portal_tokens',
-  'record_revisions','audit_logs','retention_queue'
+  'record_revisions','audit_logs','retention_queue','data_rights_requests','hotel_compliance_profiles','policy_acceptances','security_events'
 ]
 for(const table of tables){
   const{error}=await supabase.from(table).select('*',{head:true,count:'exact'})
   if(error){console.error(`Schema verification failed for ${table}: ${error.message}`);process.exit(1)}
   console.log(`OK ${table}`)
 }
-console.log('Supabase database schema verified. Cloudflare R2 is verified separately by GO-LIVE.cmd.')
+console.log('Supabase database schema verified. Cloudflare R2 is verified separately by UPLOAD-PRODUCTION.cmd.')
