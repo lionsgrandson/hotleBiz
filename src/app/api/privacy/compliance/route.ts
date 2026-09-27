@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { apiContext, body, fail, ApiError, optionalString } from '@/lib/http'
+import { apiContext, body, fail, ApiError, optionalString, isoDate } from '@/lib/http'
 import { MANAGE_ROLES } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const { admin, hotel, user } = await apiContext(request, MANAGE_ROLES)
     const b = await body(request)
     const lastReviewRaw = optionalString(b.lastLegalReviewAt, 10)
-    if (lastReviewRaw && !/^\d{4}-\d{2}-\d{2}$/.test(lastReviewRaw)) throw new ApiError(400, 'Last legal review date is invalid')
+    const lastReviewDate = lastReviewRaw ? isoDate(lastReviewRaw, 'Last legal review') : null
 
     const record = {
       hotel_id: hotel.id,
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       breach_contact_email: optionalEmail(b.breachContactEmail, 'Breach contact email'),
       privacy_notice_version: optionalString(b.privacyNoticeVersion, 100),
       terms_version: optionalString(b.termsVersion, 100),
-      last_legal_review_at: lastReviewRaw ? new Date(`${lastReviewRaw}T00:00:00.000Z`).toISOString() : null,
+      last_legal_review_at: lastReviewDate ? new Date(`${lastReviewDate}T00:00:00.000Z`).toISOString() : null,
       updated_by: user.id,
     }
 
