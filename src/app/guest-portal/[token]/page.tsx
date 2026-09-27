@@ -51,6 +51,15 @@ export default async function Portal({ params, searchParams }: { params: Promise
       {status.error && <p className="error">{status.error}</p>}
 
       <section className="card panel section">
+        <h2>Your data copy</h2>
+        <p>Download a JSON copy of the identity details, visible feedback and published/under-review incidents shown through this portal. Raw hotel evidence and internal staff/audit material are not included in this self-service export.</p>
+        <form action="/api/guest-portal/export" method="post">
+          <input type="hidden" name="token" value={token} />
+          <button className="secondary">Download my GuestAtlas data</button>
+        </form>
+      </section>
+
+      <section className="card panel section">
         <h2>Privacy and data-rights request</h2>
         <p>Use this for a broader access/export, rectification, erasure, restriction or objection request. Record-level factual challenges should use the forms below.</p>
         <form action="/api/guest-portal/privacy-request" method="post" className="simpleForm" style={{ padding: 0 }}>
