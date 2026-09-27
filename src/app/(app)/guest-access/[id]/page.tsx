@@ -20,7 +20,7 @@ export default async function GuestAccess({params,searchParams}:{params:Promise<
     <section className="card panel section">
       <h2>Issued access links</h2>
       {!tokens?.length?<p className="empty">No links issued.</p>:<table className="table"><thead><tr><th>Created</th><th>Expires</th><th>Use</th><th>Status</th><th>Action</th></tr></thead><tbody>
-        {tokens.map((t:any)=>{const active=!t.revoked_at && new Date(t.expires_at)>new Date();return <tr key={t.id}>
+        {tokens.map((t:any)=>{const active=!t.revoked_at && new Date(t.expires_at).getTime()>Date.now();return <tr key={t.id}>
           <td>{new Date(t.created_at).toLocaleString()}</td><td>{new Date(t.expires_at).toLocaleString()}</td>
           <td>{t.access_count||0} views{t.last_accessed_at?` · last ${new Date(t.last_accessed_at).toLocaleString()}`:''}</td>
           <td>{t.revoked_at?'Revoked':active?'Active':'Expired'}</td>
