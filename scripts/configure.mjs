@@ -57,6 +57,9 @@ async function main(){
   const appUrl=defaults.NEXT_PUBLIC_APP_URL
   const urlMode='workers_dev_resolved'
 
+  const operatorLegalName=await ask('Legal operator/company name','OPERATOR_LEGAL_NAME','REPLACE_WITH_LEGAL_OPERATOR')
+  const privacyContact=await ask('Privacy contact email','PRIVACY_CONTACT_EMAIL','privacy@example.com')
+  const supportEmail=await ask('Support email','SUPPORT_EMAIL','support@example.com')
   const adminEmails=await askOptional('Bootstrap platform admin email(s), comma separated; optional','PLATFORM_ADMIN_EMAILS')
   const resend=await askOptional('Resend API key; optional','RESEND_API_KEY')
   const emailFrom=await ask('Invitation email sender; optional','EMAIL_FROM','GuestAtlas <noreply@example.com>')
@@ -78,6 +81,9 @@ async function main(){
     AUDIT_HASH_SECRET:audit,
     NEXT_PUBLIC_APP_URL:appUrl,
     GUESTATLAS_URL_MODE:urlMode,
+    OPERATOR_LEGAL_NAME:operatorLegalName,
+    PRIVACY_CONTACT_EMAIL:privacyContact,
+    SUPPORT_EMAIL:supportEmail,
     RESEND_API_KEY:resend,
     EMAIL_FROM:emailFrom,
     PLATFORM_ADMIN_EMAILS:adminEmails,
@@ -96,7 +102,7 @@ async function main(){
 
   console.log('\n.env.local written. Cryptographic application secrets were generated automatically.')
   console.log(`Production URL: ${appUrl}`)
-  console.log('Next: run GO-LIVE.cmd (or deploy.cmd).')
+  console.log('Next: run UPLOAD-PRODUCTION.cmd (GO-LIVE.cmd and deploy.cmd are aliases).')
 }
 
 try{await main()}finally{rl.close()}
