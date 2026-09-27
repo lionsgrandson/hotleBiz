@@ -5,7 +5,7 @@ import { audit } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
-export default async function Portal({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ submitted?: string; error?: string }> }) {
+export default async function Portal({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ submitted?: string; privacySubmitted?: string; error?: string }> }) {
   const { token } = await params
   const status = await searchParams
   const admin = createAdminClient()
@@ -47,7 +47,27 @@ export default async function Portal({ params, searchParams }: { params: Promise
       <h1>{decryptPII(guest.legal_name_cipher) || 'Guest record'}</h1>
       <p>This private page lets you review information held in the GuestAtlas network and challenge or request correction of a specific item. It does not expose other guests or internal hotel notes.</p>
       {status.submitted === '1' && <p className="notice">Your challenge / correction request was submitted successfully and the record has been sent for review.</p>}
+      {status.privacySubmitted === '1' && <p className="notice">Your privacy/data-rights request was submitted and logged for follow-up.</p>}
       {status.error && <p className="error">{status.error}</p>}
+
+      <section className="card panel section">
+        <h2>Privacy and data-rights request</h2>
+        <p>Use this for a broader access/export, rectification, erasure, restriction or objection request. Record-level factual challenges should use the forms below.</p>
+        <form action="/api/guest-portal/privacy-request" method="post" className="simpleForm" style={{ padding: 0 }}>
+          <input type="hidden" name="token" value={token} />
+          <label>Request type<select name="requestType" required defaultValue="access">
+            <option value="access">Access</option>
+            <option value="export">Portable/export copy</option>
+            <option value="rectification">Rectification</option>
+            <option value="erasure">Erasure</option>
+            <option value="restriction">Restriction of processing</option>
+            <option value="objection">Objection</option>
+            <option value="other">Other privacy request</option>
+          </select></label>
+          <label>Details<textarea name="message" maxLength={3000} /></label>
+          <button className="secondary">Submit privacy request</button>
+        </form>
+      </section>
 
       <h2>Stay feedback</h2>
       {!feedback.length ? <p>No visible feedback.</p> : feedback.map((x: any) => (
