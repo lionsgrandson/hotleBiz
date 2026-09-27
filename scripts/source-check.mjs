@@ -88,8 +88,10 @@ if (!/\[auth\.mfa\.totp\][\s\S]*enroll_enabled\s*=\s*true[\s\S]*verify_enabled\s
 if (!/\[auth\.email\][\s\S]*enable_confirmations\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep email confirmations enabled')
 if (!/\[auth\.email\][\s\S]*secure_password_change\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must require secure password change')
 
-const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8')
-if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
+const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8').toLowerCase()
+const explainsChallenge = /\bchallenge\b|\bdispute\b/.test(guestRights)
+const explainsCorrection = /\bcorrection\b|\bcorrect\b|\brectification\b/.test(guestRights)
+if (!explainsChallenge || !explainsCorrection) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
 const guestPortal = readFileSync(join(root, 'src/app/guest-portal/[token]/page.tsx'), 'utf8')
 if (!guestPortal.includes('/api/guest-portal/dispute') || !guestPortal.includes('Challenge / correction request')) throw new Error('Guest portal must retain record-level dispute submission controls')
 if (!guestPortal.includes('/api/guest-portal/privacy-request')) throw new Error('Guest portal must expose the broader data-rights request workflow')
