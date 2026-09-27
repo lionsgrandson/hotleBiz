@@ -3,47 +3,35 @@ import Link from 'next/link'
 export const dynamic = 'force-static'
 
 export default function GuestRightsPage() {
+  const privacyEmail = process.env.PRIVACY_CONTACT_EMAIL || 'privacy@example.com'
   return (
     <main className="legal" style={{ maxWidth: 920 }}>
       <span className="eyebrow">Guest rights</span>
-      <h1>Review, challenge, or correct your GuestAtlas record</h1>
-      <p>
-        Hotel staff accounts and guest access are separate. Guests do not need a hotel staff account.
-        A participating property can issue a private GuestAtlas access link after verifying that the
-        recipient is the guest connected to the record.
-      </p>
+      <h1>Access, review, challenge, or correct your GuestAtlas record</h1>
+      <p>GuestAtlas separates hotel staff access from guest access. A participating property can issue a private guest portal link only after verifying the recipient is connected to the record.</p>
 
       <section className="card panel section">
-        <h2>If you already received a GuestAtlas access link</h2>
-        <p>
-          Open the secure link sent by the property. Your private guest portal shows the feedback and
-          published incidents connected to your record. Each item includes a challenge / correction
-          request form that you can submit directly.
-        </p>
-        <p>
-          When a challenge is submitted, the record is marked for review and the responsible property
-          can accept, correct, withdraw, or reject the challenge through its dispute workflow.
-        </p>
+        <h2>Private guest portal</h2>
+        <p>The portal shows published feedback and incidents associated with your record. You can challenge an individual item or submit a broader privacy request for access/export, rectification, erasure, restriction, objection, or another data-rights matter.</p>
+        <p>Submitting a request does not automatically delete data. Requests are reviewed so legal holds, accuracy disputes, third-party rights and applicable legal requirements can be handled correctly.</p>
       </section>
 
       <section className="card panel section">
-        <h2>If you need access</h2>
-        <p>
-          Contact the property that recorded your stay and ask for a GuestAtlas guest access link. The
-          property must verify your identity before issuing access. This prevents someone else from
-          searching for or challenging a guest record without authorization.
-        </p>
+        <h2>How to obtain access</h2>
+        <p>Contact the participating property connected to your stay and ask for a GuestAtlas access link. The property must verify identity before issuing it. If you cannot reach the property, contact <a href={`mailto:${privacyEmail}`}>{privacyEmail}</a>.</p>
       </section>
 
       <section className="card panel section">
-        <h2>What you can challenge</h2>
-        <p>
-          You can submit a challenge or correction request against an individual stay feedback record
-          or a published incident. The request is stored as a formal dispute with a review history.
-        </p>
+        <h2>Human review</h2>
+        <p>GuestAtlas is not intended to make a fully automated booking denial. Participating properties remain responsible for checking identity, record quality, dispute status, age of the information and context before making a material decision.</p>
       </section>
 
-      <p><Link href="/login">Hotel staff sign in</Link></p>
+      <section className="card panel section">
+        <h2>Complaints and escalation</h2>
+        <p>If a factual dispute is rejected, you may ask the contributing property for its rationale and use the privacy contact above for further escalation. Regulatory or court rights depend on the law that applies to you and to the relevant controller.</p>
+      </section>
+
+      <p><Link href="/privacy">Privacy notice</Link> · <Link href="/terms">Network rules</Link> · <Link href="/login">Hotel staff sign in</Link></p>
     </main>
   )
 }
