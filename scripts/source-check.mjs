@@ -86,6 +86,7 @@ if (/^\[storage\]/m.test(supabaseConfig)) throw new Error('Hosted Storage config
 if (!/schemas\s*=\s*\["public",\s*"graphql_public"\]/.test(supabaseConfig)) throw new Error('Data API schemas should stay on the existing free-tier-safe public/graphql_public set')
 if (!/\[auth\.mfa\.totp\][\s\S]*enroll_enabled\s*=\s*true[\s\S]*verify_enabled\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep TOTP MFA enabled')
 if (!/\[auth\.email\][\s\S]*enable_confirmations\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must keep email confirmations enabled')
+if (!/\[auth\.email\][\s\S]*secure_password_change\s*=\s*true/.test(supabaseConfig)) throw new Error('Supabase auth reference must require secure password change')
 
 const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'utf8')
 if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
