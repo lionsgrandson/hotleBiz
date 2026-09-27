@@ -121,6 +121,7 @@ Redirect = https://guestatlas.mosheschwartzberg.workers.dev/auth/confirm
 TOTP MFA enrollment = enabled
 TOTP MFA verification = enabled
 Confirm email = enabled
+Secure password change = enabled
 ```
 
 The same allowed `/auth/confirm` redirect is used for password recovery; the application validates the requested post-confirmation path before redirecting.
