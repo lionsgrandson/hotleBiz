@@ -33,7 +33,10 @@ export async function POST(request: Request) {
       status: 'identity_verified',
       identity_verified_at: new Date().toISOString(),
     }).select('id').single()
-    if (error) throw error
+    if (error) {
+      if (error.code === '23505') throw new ApiError(409, 'An open request of this type already exists')
+      throw error
+    }
 
     await audit(admin, {
       hotelId: t.source_hotel_id,
