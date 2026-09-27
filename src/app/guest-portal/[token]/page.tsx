@@ -19,6 +19,14 @@ export default async function Portal({ params, searchParams }: { params: Promise
   if (tokenError) throw tokenError
   if (!portalToken) notFound()
 
+  const accessedAt = new Date().toISOString()
+  const { error: accessUpdateError } = await admin.from('guest_portal_tokens').update({
+    first_accessed_at: portalToken.first_accessed_at || accessedAt,
+    last_accessed_at: accessedAt,
+    access_count: Number(portalToken.access_count || 0) + 1,
+  }).eq('id', portalToken.id)
+  if (accessUpdateError) throw accessUpdateError
+
   await audit(admin, {
     hotelId: portalToken.source_hotel_id,
     userId: null,
