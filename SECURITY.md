@@ -24,12 +24,15 @@
 - Append-only audit log trigger and revision records for dispute corrections.
 - Challenged incidents and stay feedback are withheld from other properties until the source property resolves the dispute.
 - Cloudflare `CF-Connecting-IP` is HMAC-hashed before application audit persistence; raw client IP is not retained in the application audit row.
-- Security headers and dynamic authenticated pages.
+- Security headers, HSTS, dynamic authenticated pages, and no-store/no-index controls on guest portal and password-reset surfaces.
 - Separate Cloudflare scheduled Worker authenticates retention-queue refresh with `CRON_SECRET`.
+- Password recovery uses Supabase recovery links and a generic request response to reduce account enumeration.
+- Guest portal links are expiring, revocable, usage-tracked, and scoped to the verified guest record.
+- Broader privacy requests and self-service exports are logged; destructive erasure is not automatic.
 - Cloudflare Worker Observability is enabled for the application and maintenance workers.
 - Environment validation blocks placeholder/weak launch secrets and mismatched custom-domain/app origins.
 - Deployment secret bundles use an allowlist and explicitly omit Cloudflare/Supabase deployment credentials.
-- `GO-LIVE.cmd` performs source checks, typecheck, self-tests, Cloudflare production build and Wrangler dry-run before source push or production migration/deploy.
+- `UPLOAD-PRODUCTION.cmd` performs local source checks, dependency audit, typecheck, self-tests, Cloudflare production build and Worker dry-runs before production migration/deploy; GitHub Actions are not required.
 
 ## Production operations still required
 
@@ -47,4 +50,4 @@
 
 ## Threats explicitly addressed
 
-Network scraping, identifier fishing, leaked guest UUIDs, false-positive identity merging, source-hotel travel/contact disclosure, defamatory/speculative incident submissions, self-approval of serious accusations, public evidence links, read-only evidence overreach, plaintext database leaks, cross-site writes, stale staff access, deployment-secret leakage and SSR/CDN session leakage.
+Network scraping, account enumeration, stale recovery sessions, guest-link leakage/reuse, identifier fishing, leaked guest UUIDs, false-positive identity merging, source-hotel travel/contact disclosure, defamatory/speculative incident submissions, self-approval of serious accusations, public evidence links, read-only evidence overreach, plaintext database leaks, cross-site writes, stale staff access, deployment-secret leakage and SSR/CDN session leakage.
