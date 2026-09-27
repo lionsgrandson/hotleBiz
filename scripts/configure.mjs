@@ -7,9 +7,9 @@ const rl = createInterface({ input, output })
 const clean = (value='') => String(value).replace(/[\r\n]/g, '').trim()
 
 const defaults = {
-  NEXT_PUBLIC_SUPABASE_URL: 'https://dcyzzfhvazavhcrgdlmo.supabase.co',
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_acYHRkPvi1VsM8ovbQ2FpQ_PL4tK-PH',
-  SUPABASE_PROJECT_REF: 'dcyzzfhvazavhcrgdlmo',
+  NEXT_PUBLIC_SUPABASE_URL: 'https://nfzszxaaweelprknbwjx.supabase.co',
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_nzrQwYcc_o2l70rawTUftg_OordQa_y',
+  SUPABASE_PROJECT_REF: 'nfzszxaaweelprknbwjx',
   NEXT_PUBLIC_APP_URL: 'https://guestatlas.mosheschwartzberg.workers.dev',
 }
 
