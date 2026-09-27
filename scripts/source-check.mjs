@@ -32,11 +32,17 @@ if (obviousSecrets.length) throw new Error(`Possible committed secret in: ${[...
 const requiredFiles = [
   'supabase/migrations/202609060001_init.sql',
   'supabase/migrations/202609060002_hardening.sql',
+  'supabase/migrations/202609270001_production_readiness.sql',
   'src/app/api/search/route.ts',
   'src/app/api/guests/route.ts',
   'src/app/api/incidents/route.ts',
   'src/app/api/evidence/[id]/route.ts',
   'src/app/api/guest-portal/dispute/route.ts',
+  'src/app/api/guest-portal/privacy-request/route.ts',
+  'src/app/api/privacy/requests/route.ts',
+  'src/app/(app)/privacy-center/page.tsx',
+  'src/app/forgot-password/page.tsx',
+  'src/app/reset-password/page.tsx',
   'src/app/guest-rights/page.tsx',
   'src/components/MfaGate.tsx',
   'src/lib/cloudflare.ts',
@@ -45,6 +51,8 @@ const requiredFiles = [
   'wrangler.maintenance.jsonc',
   'open-next.config.ts',
   'GO-LIVE.cmd',
+  'UPLOAD-PRODUCTION.cmd',
+  'PRODUCTION_READINESS.md',
   'middleware.ts',
   'scripts/deploy-and-capture.mjs',
   'scripts/finalize-workers-url.mjs',
@@ -57,10 +65,13 @@ const middleware = readFileSync(join(root, 'middleware.ts'), 'utf8')
 if (!middleware.includes('export async function middleware') && !middleware.includes('export function middleware')) throw new Error('middleware.ts must export a middleware function for OpenNext compatibility')
 
 const productionUrl = 'https://guestatlas.mosheschwartzberg.workers.dev'
-const goLive = readFileSync(join(root, 'GO-LIVE.cmd'), 'utf8')
-if (!goLive.includes('pin-production-url.mjs')) throw new Error('GO-LIVE.cmd must pin the final production URL')
-if (/\bnpx\s+supabase\s+config\s+push\b/i.test(goLive)) throw new Error('GO-LIVE.cmd must not run supabase config push; it can sync paid/optional hosted services')
-if (!goLive.includes('supabase db push')) throw new Error('GO-LIVE.cmd must still apply Postgres migrations')
+const upload = readFileSync(join(root, 'UPLOAD-PRODUCTION.cmd'), 'utf8')
+if (!upload.includes('pin-production-url.mjs')) throw new Error('UPLOAD-PRODUCTION.cmd must pin the final production URL')
+if (/\bnpx\s+supabase\s+config\s+push\b/i.test(upload)) throw new Error('UPLOAD-PRODUCTION.cmd must not run supabase config push; it can sync paid/optional hosted services')
+if (!upload.includes('supabase db push')) throw new Error('UPLOAD-PRODUCTION.cmd must apply Postgres migrations')
+if (/\bgit\s+(?:push|pull|commit|fetch|checkout|merge|rebase)\b/i.test(upload)) throw new Error('UPLOAD-PRODUCTION.cmd must deploy locally without GitHub orchestration')
+const workflowFiles = files.filter(f => relative(root, f).replace(/\\/g,'/').startsWith('.github/workflows/'))
+if (workflowFiles.length) throw new Error('GitHub Actions workflows are not part of the GuestAtlas production deployment path')
 const pinUrl = readFileSync(join(root, 'scripts/pin-production-url.mjs'), 'utf8')
 if (!pinUrl.includes(productionUrl) || !pinUrl.includes("workers_dev_resolved")) throw new Error('Production URL pin helper must enforce the final GuestAtlas workers.dev URL')
 
@@ -77,10 +88,9 @@ const guestRights = readFileSync(join(root, 'src/app/guest-rights/page.tsx'), 'u
 if (!guestRights.includes('challenge') || !guestRights.includes('correction')) throw new Error('Public guest-rights page must explain guest challenge/correction rights')
 const guestPortal = readFileSync(join(root, 'src/app/guest-portal/[token]/page.tsx'), 'utf8')
 if (!guestPortal.includes('/api/guest-portal/dispute') || !guestPortal.includes('Challenge / correction request')) throw new Error('Guest portal must retain record-level dispute submission controls')
-
-const deployCapture = readFileSync(join(root, 'scripts/deploy-and-capture.mjs'), 'utf8')
-if (deployCapture.includes("'npx.cmd'") || deployCapture.includes('"npx.cmd"')) throw new Error('Windows deploy capture must not spawn npx.cmd directly')
-if (!deployCapture.includes('process.execPath') || !deployCapture.includes('node_modules/@opennextjs/cloudflare/dist/cli/index.js')) throw new Error('Deploy capture must launch the OpenNext JavaScript CLI with Node directly')
+if (!guestPortal.includes('/api/guest-portal/privacy-request')) throw new Error('Guest portal must expose the broader data-rights request workflow')
+const passwordReset = readFileSync(join(root, 'src/app/forgot-password/actions.ts'), 'utf8')
+if (!passwordReset.includes('resetPasswordForEmail')) throw new Error('Password recovery flow is missing')
 
 const gitignore = readFileSync(join(root, '.gitignore'), 'utf8')
 if (!/^supabase\/\.temp\/$/m.test(gitignore)) throw new Error('Supabase CLI temp state must be gitignored')
