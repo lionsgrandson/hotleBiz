@@ -14,7 +14,7 @@ export async function login(formData: FormData) {
 export async function signup(formData: FormData) {
   const email = String(formData.get('email') || '').trim()
   const password = String(formData.get('password') || '')
-  if (password.length < 10) redirect('/login?error=Password%20must%20be%20at%20least%2010%20characters')
+  if (password.length < 12) redirect('/login?error=Password%20must%20be%20at%20least%2012%20characters')
   const supabase = await createClient()
   const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${origin}/auth/confirm` } })
